@@ -1,0 +1,23 @@
+<nav class="bg-stone-900 text-white px-6 py-3 shadow-md flex justify-between items-center text-sm font-medium border-b border-stone-800">
+    <div class="flex items-center gap-6">
+        <span class="font-bold text-amber-500 text-base">Company A (<%= user ? user.name : 'Guest' %>)</span>
+        
+        <% if (user && user.role === 'customer') { %>
+            <a href="/" class="hover:text-amber-400 transition">Customer Menu</a>
+            <a href="/cart" class="hover:text-amber-400 transition">Cart & Checkout</a>
+            <a href="/party-order" class="hover:text-amber-400 transition">Party Orders</a>
+        <% } %>
+
+        <% if (user && user.role === 'kitchen') { %>
+            <a href="/kitchen/<%= user.outletId %>" class="hover:text-amber-400 transition">Kitchen KDS (<%= user.outletId %>)</a>
+        <% } %>
+    </div>
+
+    <div>
+        <% if (user) { %>
+            <a href="/logout" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition">Sign Out</a>
+        <% } else { %>
+            <a href="/login" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs font-bold transition">Sign In</a>
+        <% } %>
+    </div>
+</nav>

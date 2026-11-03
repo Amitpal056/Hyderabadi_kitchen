@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>KDS - <%= outlet.name %></title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-stone-950 text-stone-100 p-6 font-sans">
+    <%- include('../partials/nav') %>
+
+    <header class="flex justify-between items-center my-6 pb-4 border-b border-stone-800">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tight">Kitchen Display: <span class="text-amber-400"><%= outlet.name %></span></h1>
+            <p class="text-xs text-stone-400 mt-1">FSSAI Lic: <span class="font-mono"><%= outlet.fssai %></span> • Android Tablet Terminal Mode</p>
+        </div>
+        <div class="text-sm bg-stone-900 border border-stone-800 px-4 py-2.5 rounded-xl shadow">
+            Active Tickets: <span id="ticket-count" class="font-bold text-amber-400 text-base"><%= outletOrders.length %></span>
+        </div>
+    </header>
+
+    <% if (outletOrders.length === 0) { %>
+        <div id="no-orders" class="bg-stone-900 border border-stone-800 rounded-2xl p-12 text-center text-stone-500">
+            <p class="text-lg font-bold">No active orders right now.</p>
+            <p class="text-xs">Waiting for live orders from direct customer checkout...</p>
+        </div>
+    <% } %>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="kds-board">
+        <% outletOrders.forEach(order => { %>
+            <div class="bg-stone-900 border-2 <%= order.isLate ? 'border-red-600 bg-red-950/30 animate-pulse' : 'border-stone-800' %> rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+                <div>
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-stone-800">
+                        <span class="font-mono font-bold text-amber-400 text-xl"><%= order.id %></span>
+                        <span class="text-xs font-extrabold px-3 py-1 rounded-full bg-stone-800 text-stone-300 uppercase tracking-wide">
+                            <%= order.status %>
+                        </span>
+                    </div>
+
+                    <ul class="space-y-3 mb-6">
+                        <% order.items.forEach(i => { %>
+                            <li class="flex justify-between items-center text-base font-semibold border-b border-stone-800/60 pb-2">
+                                <span><span class="text-amber-400 font-extrabold mr-2 text-lg"><%= i.qty %>x</span> <%= i.name %></span>
+                            </li>
+                        <% }) %>
+                    </ul>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-stone-800">
+                    <div class="flex gap-2">
+                        <% const isPastPrep = order.status === 'Ready for pickup' || order.status === 'Rider Handoff'; %>
+                        <button 
+                            onclick="updateStatus('<%= order.id %>', 'Preparing')" 
+                            <%= isPastPrep ? 'disabled' : '' %>
+                            class="flex-1 <%= order.status === 'Preparing' ? 'bg-amber-600 text-white' : 'bg-amber-600/20 text-amber-300 border border-amber-600/50' %> <%= isPastPrep ? 'opacity-40 cursor-not-allowed' : 'hover:bg-amber-600 hover:text-white cursor-pointer' %> py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition">
+                            Prep
+                        </button>
+
+                        <% const isPastReady = order.status === 'Rider Handoff'; %>
+                        <button 
+                            onclick="updateStatus('<%= order.id %>', 'Ready for pickup')" 
+                            <%= isPastReady ? 'disabled' : '' %>
+                            class="flex-1 <%= order.status === 'Ready for pickup' ? 'bg-green-600 text-white' : 'bg-green-600/20 text-green-300 border border-green-600/50' %> <%= isPastReady ? 'opacity-40 cursor-not-allowed' : 'hover:bg-green-600 hover:text-white cursor-pointer' %> py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition">
+                            Ready
+                        </button>
+                    </div>
+
+                    <button 
+                        onclick="updateStatus('<%= order.id %>', 'Rider Handoff')" 
+                        class="w-full <%= order.status === 'Rider Handoff' ? 'bg-blue-600 text-white' : 'bg-blue-600/20 text-blue-300 border border-blue-600/50' %> hover:bg-blue-600 hover:text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer">
+                        Rider Handoff
+                    </button>
+                </div>
+            </div>
+        <% }) %>
+    </div>
+
+    <script>
+        const socket = io();
+
+        function updateStatus(orderId, status) {
+            socket.emit('update-order-status', { orderId, status });
+        }
+
+        socket.on('order-updated', () => {
+            window.location.reload();
+        });
+
+        // Listen for new real-time orders placed by customers
+        socket.on('new-order-received', (order) => {
+            if (order.outletId === '<%= outlet.id %>') {
+                window.location.reload();
+            }
+        });
+    </script>
+</body>
+</html>

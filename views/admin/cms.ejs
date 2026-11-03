@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Menu CMS - Company A</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-stone-100 text-stone-900 font-sans">
+    <%- include('../partials/nav') %>
+
+    <div class="max-w-7xl mx-auto p-8">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold">Central Menu CMS</h1>
+                <p class="text-sm text-stone-500">Manage item pricing, availability, and instant 86-ing across outlets</p>
+            </div>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-stone-50 text-stone-400 uppercase text-xs">
+                    <tr>
+                        <th class="p-4">Item Name</th>
+                        <th class="p-4">Price (Inc. 5% GST)</th>
+                        <th class="p-4">Type</th>
+                        <th class="p-4">Stock Status</th>
+                        <th class="p-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-stone-100">
+                    <% menuItems.forEach(item => { %>
+                        <tr>
+                            <td class="p-4 font-bold"><%= item.name %></td>
+                            <td class="p-4 font-mono">₹<%= item.price %></td>
+                            <td class="p-4">
+                                <span class="text-xs px-2 py-0.5 rounded font-bold <%= item.isVeg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
+                                    <%= item.isVeg ? 'VEG' : 'NON-VEG' %>
+                                </span>
+                            </td>
+                            <td class="p-4">
+                                <span id="status-<%= item.id %>" class="px-2 py-1 rounded text-xs font-bold <%= item.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
+                                    <%= item.inStock ? 'IN STOCK' : 'OUT OF STOCK (86-ed)' %>
+                                </span>
+                            </td>
+                            <td class="p-4">
+                                <button onclick="toggleStock('<%= item.id %>')" class="bg-stone-800 hover:bg-stone-700 text-white px-3 py-1.5 rounded text-xs font-bold transition">
+                                    Toggle Stock
+                                </button>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        function toggleStock(itemId) {
+            socket.emit('toggle-stock', { itemId });
+        }
+        socket.on('menu-updated', () => {
+            window.location.reload();
+        });
+    </script>
+</body>
+</html>

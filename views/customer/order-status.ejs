@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Order Status - <%= order.id %></title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-stone-50 text-stone-900 font-sans">
+    <%- include('../partials/nav') %>
+
+    <main class="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border border-stone-200 p-8 my-10">
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+            <div>
+                <h1 class="text-2xl font-bold">Live Order Tracking</h1>
+                <span class="font-mono text-amber-600 font-bold text-sm"><%= order.id %></span>
+            </div>
+            <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold uppercase"><%= order.status %></span>
+        </div>
+
+        <div class="space-y-6 mb-8">
+            <div class="flex items-center gap-4">
+                <div class="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center font-bold text-sm">✓</div>
+                <div>
+                    <h4 class="font-bold text-sm">Order Confirmed & Routed</h4>
+                    <p class="text-xs text-stone-500">Sent straight to Kondapur kitchen screen</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-sm animate-pulse">⏳</div>
+                <div>
+                    <h4 class="font-bold text-sm">Kitchen Prep (AI Estimated: 25 mins)</h4>
+                    <p class="text-xs text-stone-500">Promised delivery time calculated based on live kitchen load</p>
+                </div>
+            </div>
+        </div>
+
+        <a href="/" class="block text-center bg-stone-900 hover:bg-stone-800 text-white font-bold py-3 rounded-xl text-sm transition">
+            Back to Menu
+        </a>
+    </main>
+</body>
+</html>

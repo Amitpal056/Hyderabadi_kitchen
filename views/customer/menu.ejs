@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Company A - Direct Ordering</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-stone-50 text-stone-900 font-sans">
+    <%- include('../partials/nav') %>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold tracking-tight">Order Direct & Save</h1>
+            <a href="/cart" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow transition">
+                🛒 View Cart (<%= cartCount %>)
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <% menuItems.forEach(item => { %>
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <img src="<%= item.image %>" alt="<%= item.name %>" class="h-48 w-full object-cover">
+                        <div class="p-5">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold text-lg"><%= item.name %></h3>
+                                <span class="text-xs px-2 py-0.5 rounded font-bold <%= item.isVeg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
+                                    <%= item.isVeg ? 'VEG' : 'NON-VEG' %>
+                                </span>
+                            </div>
+                            <p class="text-stone-500 text-sm mb-4"><%= item.description %></p>
+                            <span class="text-xl font-extrabold block mb-1">₹<%= item.price %></span>
+                            <span class="text-xs text-stone-400 block mb-4">Inclusive of 5% GST</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Quantity Selection Form -->
+                    <form action="/cart/add" method="POST" class="p-5 pt-0 flex items-center gap-3">
+                        <input type="hidden" name="itemId" value="<%= item.id %>">
+                        <div class="flex items-center border rounded-lg bg-stone-50">
+                            <span class="text-xs font-bold text-stone-500 px-2">Qty</span>
+                            <input type="number" name="qty" value="1" min="1" max="20" class="w-14 py-2 text-center text-sm font-bold bg-transparent outline-none">
+                        </div>
+                        <button type="submit" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-lg font-bold text-sm transition cursor-pointer shadow">
+                            Add to Cart
+                        </button>
+                    </form>
+                </div>
+            <% }) %>
+        </div>
+    </main>
+</body>
+</html>

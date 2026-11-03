@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manager Dashboard - Company A</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-stone-100 text-stone-900 font-sans">
+    <%- include('../partials/nav') %>
+
+    <div class="max-w-7xl mx-auto p-8">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold">Central Operations & Marketing Dashboard</h1>
+                <p class="text-sm text-stone-500">Monitoring 14 Outlets & 3 Cloud Kitchens across Hyderabad</p>
+            </div>
+            <span class="bg-green-100 text-green-800 px-3 py-1.5 rounded-lg text-sm font-bold">Direct Order Share: 12.4%</span>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-sm border">
+                <p class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Commission Saved (MTD)</p>
+                <h3 class="text-2xl font-extrabold text-green-700">₹8.12 Lakh</h3>
+                <span class="text-xs text-stone-500">Target: ₹95.04 Lakh / year</span>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border">
+                <p class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Peak Hour Orders (Sun Dinner)</p>
+                <h3 class="text-2xl font-extrabold text-amber-600">1,184 / hr</h3>
+                <span class="text-xs text-stone-500">Kitchen load nominal</span>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border">
+                <p class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Median Prep Time</p>
+                <h3 class="text-2xl font-extrabold">22 mins</h3>
+                <span class="text-xs text-stone-500">AI Estimate accuracy: 94.2%</span>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border">
+                <p class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Repeat Customer Rate</p>
+                <h3 class="text-2xl font-extrabold text-blue-600">38.5%</h3>
+                <span class="text-xs text-stone-500">Exceeds 35% goal</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-6 border-b border-stone-100 font-bold text-lg">Active Outlet Performance</div>
+            <table class="w-full text-left text-sm">
+                <thead class="bg-stone-50 text-stone-400 uppercase text-xs">
+                    <tr>
+                        <th class="p-4">Outlet Name</th>
+                        <th class="p-4">FSSAI License</th>
+                        <th class="p-4">Active Tickets</th>
+                        <th class="p-4">Avg Prep Time</th>
+                        <th class="p-4">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-stone-100">
+                    <% outlets.forEach(outlet => { %>
+                        <tr>
+                            <td class="p-4 font-bold"><%= outlet.name %></td>
+                            <td class="p-4 font-mono text-xs"><%= outlet.fssai %></td>
+                            <td class="p-4">14 orders</td>
+                            <td class="p-4">24 mins</td>
+                            <td class="p-4"><span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">Operational</span></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

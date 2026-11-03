@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Checkout - Company A Biryani</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-stone-50 text-stone-900 font-sans">
+    <%- include('../partials/nav') %>
+
+    <main class="max-w-3xl mx-auto px-4 py-10">
+        <h1 class="text-2xl font-bold mb-6">Review Your Cart & Pay Direct</h1>
+        
+        <% if (cart.length === 0) { %>
+            <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-12 text-center">
+                <div class="text-4xl mb-3">🛒</div>
+                <h2 class="text-xl font-bold mb-2">Your cart is empty</h2>
+                <p class="text-sm text-stone-500 mb-6">Add delicious biryanis from the menu to get started.</p>
+                <a href="/" class="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition">
+                    Browse Menu
+                </a>
+            </div>
+        <% } else { %>
+            <form action="/place-order" method="POST" class="space-y-6">
+                <input type="hidden" name="redeemed" id="redeemed-input" value="false">
+                
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+                    <h2 class="font-semibold text-lg mb-4 border-b pb-2">Cart Items</h2>
+                    <div class="space-y-4 mb-6">
+                        <% cart.forEach(item => { %>
+                            <div class="flex justify-between items-center text-sm border-b border-stone-100 pb-3">
+                                <div>
+                                    <h4 class="font-bold"><%= item.name %></h4>
+                                    <span class="text-xs text-stone-500">₹<%= item.price %> per unit</span>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="flex items-center border rounded-lg bg-stone-50 overflow-hidden">
+                                        <a href="/cart/decrease/<%= item.id %>" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">-</a>
+                                        <span class="px-3 font-bold text-xs"><%= item.qty %></span>
+                                        <a href="/cart/add?itemId=<%= item.id %>&qty=1" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">+</a>
+                                    </div>
+                                    <span class="font-semibold w-16 text-right">₹<%= item.price * item.qty %></span>
+                                    <a href="/cart/remove/<%= item.id %>" class="text-red-600 hover:text-red-800 text-xs font-bold px-2 py-1 bg-red-50 rounded transition">
+                                        Remove
+                                    </a>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+
+                    <!-- Loyalty Rewards Section -->
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-amber-900 text-sm">Loyalty Rewards</p>
+                            <p class="text-xs text-amber-700">You have 240 points available (Worth ₹24)</p>
+                        </div>
+                        <button type="button" id="redeem-btn" onclick="redeemPoints()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs font-semibold transition cursor-pointer">
+                            Redeem
+                        </button>
+                    </div>
+
+                    <!-- Bill Breakdown -->
+                    <div class="border-t border-stone-200 pt-4 space-y-2 text-sm">
+                        <div class="flex justify-between"><span class="text-stone-600">Item Total</span><span>₹<%= itemTotal %></span></div>
+                        <div class="flex justify-between"><span class="text-stone-600">Delivery Fee</span><span>₹56</span></div>
+                        <div id="discount-row" class="flex justify-between text-green-700 font-medium hidden">
+                            <span>Loyalty Discount Applied</span>
+                            <span>-₹24</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-stone-400"><span>Includes 5% GST</span><span>Calculated at checkout</span></div>
+                        <div class="flex justify-between font-extrabold text-base pt-2 border-t border-stone-200">
+                            <span>To Pay</span>
+                            <span id="final-total">₹<%= itemTotal + 56 %></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+                    <h2 class="font-semibold text-lg mb-4">Payment Method (Test Mode)</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <label class="border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-amber-600">
+                            <input type="radio" name="paymentMethod" value="UPI" checked class="text-amber-600">
+                            <span class="font-medium text-sm">UPI (GPay / PhonePe)</span>
+                        </label>
+                        <label class="border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-amber-600">
+                            <input type="radio" name="paymentMethod" value="Card" class="text-amber-600">
+                            <span class="font-medium text-sm">Credit / Debit Card</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" id="pay-btn" class="w-full bg-amber-600 hover:bg-amber-700 text-white text-center py-3.5 rounded-xl font-bold shadow-md transition cursor-pointer">
+                    Pay & Place Secure Direct Order (₹<%= itemTotal + 56 %>)
+                </button>
+            </form>
+        <% } %>
+    </main>
+
+    <script>
+        let baseTotal = <%= cart.length > 0 ? itemTotal + 56 : 0 %>;
+        let isRedeemed = false;
+
+        function redeemPoints() {
+            if (!isRedeemed) {
+                isRedeemed = true;
+                baseTotal -= 24;
+                document.getElementById('final-total').innerText = `₹${baseTotal}`;
+                document.getElementById('discount-row').classList.remove('hidden');
+                document.getElementById('redeemed-input').value = 'true';
+                
+                const btn = document.getElementById('redeem-btn');
+                btn.innerText = 'Applied (₹24 off)';
+                btn.classList.replace('bg-amber-600', 'bg-green-700');
+                
+                document.getElementById('pay-btn').innerText = `Pay & Place Secure Direct Order (₹${baseTotal})`;
+            }
+        }
+    </script>
+</body>
+</html>

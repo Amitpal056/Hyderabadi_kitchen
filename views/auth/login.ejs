@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sign In - Company A Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-stone-900 text-stone-100 font-sans flex items-center justify-center h-screen">
+    <div class="max-w-md w-full bg-stone-800 border border-stone-700 rounded-2xl p-8 shadow-xl">
+        <h1 class="text-2xl font-bold mb-2 text-amber-500">Company A Portal</h1>
+        <p class="text-xs text-stone-400 mb-6">Select your role to sign in securely.</p>
+
+        <form action="/login" method="POST" class="space-y-5">
+            <div>
+                <label class="block text-xs font-bold uppercase text-stone-300 mb-2">Select User Role</label>
+                <select name="role" id="roleSelect" onchange="handleRoleChange()" class="w-full bg-stone-900 border border-stone-700 rounded-lg p-3 text-sm text-stone-100 outline-none focus:border-amber-500">
+                    <option value="customer">Customer (Direct Ordering)</option>
+                    <option value="kitchen">Kitchen Staff (KDS Terminal)</option>
+                    <option value="admin">Central Operations Manager / Admin</option>
+                </select>
+            </div>
+
+            <div id="outletField" class="hidden">
+                <label class="block text-xs font-bold uppercase text-stone-300 mb-2">Assign Outlet Location</label>
+                <select name="outletId" class="w-full bg-stone-900 border border-stone-700 rounded-lg p-3 text-sm text-stone-100 outline-none focus:border-amber-500">
+                    <option value="kondapur">Kondapur Outlet</option>
+                    <option value="gachibowli">Gachibowli Cloud Kitchen</option>
+                    <option value="kukatpally">Kukatpally Outlet</option>
+                </select>
+            </div>
+
+            <button type="submit" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl transition text-sm shadow-md cursor-pointer">
+                Sign In to Workspace
+            </button>
+        </form>
+    </div>
+
+    <script>
+        function handleRoleChange() {
+            const role = document.getElementById('roleSelect').value;
+            const outletField = document.getElementById('outletField');
+            if (role === 'kitchen') {
+                outletField.classList.remove('hidden');
+            } else {
+                outletField.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
