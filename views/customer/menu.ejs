@@ -2,80 +2,87 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Company A - Direct Menu</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu - Hyderabadi Biryani Direct</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
-<body class="bg-stone-50 text-stone-900 font-sans">
+<body class="bg-stone-50 text-stone-900 font-sans antialiased min-h-screen flex flex-col">
     <%- include('../partials/nav') %>
 
-    <main class="max-w-7xl mx-auto px-4 py-8">
-        <div class="flex justify-between items-center mb-6 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+    <main class="max-w-6xl mx-auto px-6 py-12 flex-1 w-full">
+        <!-- Sub-header & Outlet Status -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-8 mb-10 border-b border-stone-200 gap-4">
             <div>
-                <h1 class="text-xl font-extrabold text-amber-900">Ordering from: <%= currentOutlet.name %></h1>
-                <p class="text-xs text-amber-700">Service Radius: <%= currentOutlet.radius %> • FSSAI Lic #<%= currentOutlet.fssai %></p>
+                <span class="text-xs font-semibold uppercase tracking-widest text-amber-700 block mb-1">Direct Outlet Delivery</span>
+                <h1 class="text-3xl font-extrabold tracking-tight text-stone-900"><%= currentOutlet.name %></h1>
+                <p class="text-xs text-stone-500 mt-1 font-medium">Service Radius: <%= currentOutlet.radius %> • FSSAI License: <span class="font-mono text-stone-700"><%= currentOutlet.fssai %></span></p>
             </div>
             <div class="flex items-center gap-4">
-                <a href="/select-outlet" class="text-xs text-amber-800 underline font-semibold">Change Outlet</a>
-                <a href="/cart" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow transition">
-                    🛒 View Cart (<%= cartCount %>)
+                <a href="/select-outlet" class="text-xs font-semibold text-stone-600 hover:text-stone-900 underline transition">Switch Location</a>
+                <a href="/cart" class="bg-stone-900 hover:bg-amber-600 text-stone-100 font-bold text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition shadow-sm">
+                    Cart (<%= cartCount %>)
                 </a>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="menu-grid">
+        <!-- Menu Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="menu-grid">
             <% menuItems.forEach(item => { %>
-                <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden flex flex-col justify-between <%= !item.inStock ? 'opacity-60 bg-stone-100' : '' %>" id="item-card-<%= item.id %>">
+                <div class="bg-white rounded-2xl border border-stone-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between <%= !item.inStock ? 'opacity-50 bg-stone-100' : '' %>" id="item-card-<%= item.id %>">
                     <div>
-                        <div class="relative">
-                            <img src="<%= item.image %>" alt="<%= item.name %>" class="h-48 w-full object-cover">
+                        <!-- Appetizing Photo Section -->
+                        <div class="relative aspect-4/3 w-full overflow-hidden bg-stone-100">
+                            <img src="<%= item.image %>" alt="<%= item.name %>" class="w-full h-full object-cover">
+                            <span class="absolute top-3 left-3 text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full <%= item.isVeg ? 'bg-emerald-800 text-white' : 'bg-rose-900 text-white' %>">
+                                <%= item.isVeg ? 'VEG' : 'NON-VEG' %>
+                            </span>
                             <% if (!item.inStock) { %>
-                                <div class="absolute inset-0 bg-stone-950/60 flex items-center justify-center">
-                                    <span class="bg-red-600 text-white font-extrabold text-xs px-3 py-1 rounded-full uppercase tracking-wider">Sold Out</span>
+                                <div class="absolute inset-0 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center">
+                                    <span class="bg-stone-100 text-stone-950 font-extrabold text-xs px-4 py-1.5 rounded-full uppercase tracking-widest">Sold Out</span>
                                 </div>
                             <% } %>
                         </div>
-                        <div class="p-5">
-                            <div class="flex justify-between items-start mb-2">
-                                <h3 class="font-bold text-lg"><%= item.name %></h3>
-                                <span class="text-xs px-2 py-0.5 rounded font-bold <%= item.isVeg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
-                                    <%= item.isVeg ? 'VEG' : 'NON-VEG' %>
-                                </span>
+
+                        <!-- Details & Pricing -->
+                        <div class="p-6">
+                            <div class="flex justify-between items-baseline mb-2">
+                                <h3 class="font-bold text-xl tracking-tight text-stone-900"><%= item.name %></h3>
+                                <span class="font-extrabold text-lg text-amber-700">₹<%= item.price %></span>
                             </div>
-                            <p class="text-stone-500 text-sm mb-4"><%= item.description %></p>
-                            <span class="text-xl font-extrabold block mb-1">From ₹<%= item.price %></span>
-                            <span class="text-xs text-stone-400 block mb-4">Inclusive of 5% GST</span>
+                            <p class="text-stone-500 text-xs leading-relaxed mb-4 line-clamp-2"><%= item.description %></p>
+                            <span class="text-[10px] text-stone-400 block font-medium">Price inclusive of 5% GST</span>
                         </div>
                     </div>
                     
-                    <!-- Portion & Add-on Form (Disabled if Sold Out) -->
-                    <form action="/cart/add" method="POST" class="p-5 pt-0 space-y-3 border-t border-stone-100 mt-2" id="form-<%= item.id %>">
+                    <!-- Portion & Add-on Selection Form -->
+                    <form action="/cart/add" method="POST" class="p-6 pt-0 space-y-4 border-t border-stone-100 mt-2" id="form-<%= item.id %>">
                         <input type="hidden" name="itemId" value="<%= item.id %>">
                         
                         <div>
-                            <label class="block text-xs font-bold text-stone-600 uppercase mb-1">Portion Size</label>
-                            <select name="portion" <%= !item.inStock ? 'disabled' : '' %> class="w-full text-xs border rounded-lg p-2 bg-stone-50 outline-none font-medium">
-                                <option value="Standard">Standard (Serves 1) - Base Price</option>
+                            <label class="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1.5">Portion Size</label>
+                            <select name="portion" <%= !item.inStock ? 'disabled' : '' %> class="w-full text-xs font-semibold border border-stone-200 rounded-xl p-2.5 bg-stone-50 outline-none focus:border-amber-600 transition">
+                                <option value="Standard">Standard (Serves 1) — Base Price</option>
                                 <option value="Family Pack">Family Pack (Serves 3-4) +₹750</option>
-                                <option value="Jumbo Feast">Jumbo Feast (Serves 6-8) +₹1400</option>
+                                <option value="Jumbo Feast">Jumbo Feast (Serves 6-8) +₹1,400</option>
                             </select>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-stone-600 uppercase mb-1">Optional Add-on</label>
-                            <label class="flex items-center gap-2 text-xs cursor-pointer">
-                                <input type="checkbox" name="addon" value="Extra Mirchi ka Salan" <%= !item.inStock ? 'disabled' : '' %> class="text-amber-600 rounded">
+                            <label class="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1.5">Add-on</label>
+                            <label class="flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer">
+                                <input type="checkbox" name="addon" value="Extra Mirchi ka Salan" <%= !item.inStock ? 'disabled' : '' %> class="rounded text-amber-600 border-stone-300">
                                 Extra Mirchi ka Salan (+₹60)
                             </label>
                         </div>
 
-                        <div class="flex items-center gap-2 pt-2">
-                            <div class="flex items-center border rounded-lg bg-stone-50">
-                                <span class="text-xs font-bold text-stone-500 px-2">Qty</span>
-                                <input type="number" name="qty" value="1" min="1" max="10" <%= !item.inStock ? 'disabled' : '' %> class="w-12 py-2 text-center text-sm font-bold bg-transparent outline-none">
+                        <div class="flex items-center gap-3 pt-2">
+                            <div class="flex items-center border border-stone-200 rounded-xl bg-stone-50 overflow-hidden">
+                                <span class="text-[10px] font-bold text-stone-400 px-2.5 uppercase">Qty</span>
+                                <input type="number" name="qty" value="1" min="1" max="10" <%= !item.inStock ? 'disabled' : '' %> class="w-10 py-2 text-center text-xs font-bold text-stone-900 bg-transparent outline-none">
                             </div>
-                            <button type="submit" <%= !item.inStock ? 'disabled' : '' %> class="flex-1 <%= item.inStock ? 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow' : 'bg-stone-300 text-stone-500 cursor-not-allowed' %> py-2.5 rounded-lg font-bold text-sm transition" id="btn-submit-<%= item.id %>">
-                                <%= item.inStock ? 'Add to Cart' : 'Currently Unavailable' %>
+                            <button type="submit" <%= !item.inStock ? 'disabled' : '' %> class="flex-1 <%= item.inStock ? 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer' : 'bg-stone-200 text-stone-400 cursor-not-allowed' %> py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-xs" id="btn-submit-<%= item.id %>">
+                                <%= item.inStock ? 'Add to Order' : 'Sold Out' %>
                             </button>
                         </div>
                     </form>
@@ -86,39 +93,27 @@
 
     <script>
         const socket = io();
-
-        // Real-time synchronization when admin toggles stock in CMS
         socket.on('menu-stock-updated', (updatedItems) => {
             updatedItems.forEach(item => {
                 const card = document.getElementById(`item-card-${item.id}`);
                 const btnSubmit = document.getElementById(`btn-submit-${item.id}`);
                 const form = document.getElementById(`form-${item.id}`);
-                
                 if (card && btnSubmit && form) {
-                    const selects = form.querySelectorAll('select, input');
+                    const inputs = form.querySelectorAll('select, input');
                     if (item.inStock) {
-                        card.classList.remove('opacity-60', 'bg-stone-100');
+                        card.classList.remove('opacity-50', 'bg-stone-100');
                         btnSubmit.disabled = false;
-                        btnSubmit.innerText = 'Add to Cart';
-                        btnSubmit.className = 'flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-lg font-bold text-sm transition cursor-pointer shadow';
-                        selects.forEach(el => el.disabled = false);
-                        const overlay = card.querySelector('.absolute');
+                        btnSubmit.innerText = 'Add to Order';
+                        btnSubmit.className = 'flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-xs';
+                        inputs.forEach(el => el.disabled = false);
+                        const overlay = card.querySelector('.absolute.inset-0');
                         if (overlay) overlay.remove();
                     } else {
-                        card.classList.add('opacity-60', 'bg-stone-100');
+                        card.classList.add('opacity-50', 'bg-stone-100');
                         btnSubmit.disabled = true;
-                        btnSubmit.innerText = 'Currently Unavailable';
-                        btnSubmit.className = 'flex-1 bg-stone-300 text-stone-500 py-2.5 rounded-lg font-bold text-sm cursor-not-allowed';
-                        selects.forEach(el => el.disabled = true);
-                        
-                        // Add Sold Out overlay if not present
-                        const imgContainer = card.querySelector('img').parentElement;
-                        if (!imgContainer.querySelector('.absolute')) {
-                            const badgeDiv = document.createElement('div');
-                            badgeDiv.className = 'absolute inset-0 bg-stone-950/60 flex items-center justify-center';
-                            badgeDiv.innerHTML = '<span class="bg-red-600 text-white font-extrabold text-xs px-3 py-1 rounded-full uppercase tracking-wider">Sold Out</span>';
-                            imgContainer.appendChild(badgeDiv);
-                        }
+                        btnSubmit.innerText = 'Sold Out';
+                        btnSubmit.className = 'flex-1 bg-stone-200 text-stone-400 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider cursor-not-allowed';
+                        inputs.forEach(el => el.disabled = true);
                     }
                 }
             });

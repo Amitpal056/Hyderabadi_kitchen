@@ -21,12 +21,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static('public'));
 
+// Session Configuration
 app.use(session({
     secret: 'company-a-secret-key-2026',
     resave: false,
     saveUninitialized: false
 }));
 
+// Global locals middleware for user sessions and defaults
 app.use((req, res, next) => {
     res.locals.user = req.session.user || null;
     if (req.session.user && req.session.user.role === 'customer') {
@@ -36,21 +38,27 @@ app.use((req, res, next) => {
     next();
 });
 
+// Dynamic In-Memory Order Repositories
 let activeOrders = [];
+let partyOrders = [];
 
+// Middleware: Authentication Guard
 function isAuthenticated(req, res, next) {
     if (req.session.user) return next();
     res.redirect('/login');
 }
 
+// Middleware: Role Access Control (RBAC) Guard
 function requireRole(role) {
     return (req, res, next) => {
         if (req.session.user && req.session.user.role === role) return next();
-        res.status(403).send(`<h1>403 Forbidden</h1><p>Access denied.</p><a href="/login">Switch Account</a>`);
+        res.status(403).send(`<h1>403 Forbidden</h1><p>Access denied. Your role is not authorized to view this page.</p><a href="/login">Switch Account</a>`);
     };
 }
 
-// --- AUTH & OUTLET SELECTION ---
+// ==========================================
+// AUTHENTICATION ROUTES
+// ==========================================
 app.get('/login', (req, res) => {
     res.render('auth/login', { outlets });
 });
@@ -78,7 +86,9 @@ app.get('/logout', (req, res) => {
     req.session.destroy(() => res.redirect('/login'));
 });
 
-// Outlet Picker via Location & Radius
+// ==========================================
+// CUSTOMER & ORDERING ROUTES
+// ==========================================
 app.get('/select-outlet', isAuthenticated, requireRole('customer'), (req, res) => {
     res.render('customer/select-outlet', { outlets });
 });
@@ -92,7 +102,6 @@ app.post('/select-outlet', isAuthenticated, requireRole('customer'), (req, res) 
     res.redirect('/');
 });
 
-// --- CUSTOMER MENU & CART ---
 app.get('/', isAuthenticated, requireRole('customer'), (req, res) => {
     const currentOutlet = outlets.find(o => o.id === req.session.selectedOutlet) || outlets[0];
     res.render('customer/menu', { 
@@ -108,16 +117,15 @@ app.post('/cart/add', isAuthenticated, requireRole('customer'), (req, res) => {
     const quantity = parseInt(qty) || 1;
     const item = menuItems.find(i => i.id === itemId);
 
-    if (item) {
+    if (item && item.inStock) {
         if (!req.session.cart) req.session.cart = [];
         
-        // Calculate price based on portion
         let basePrice = item.price;
         let portionLabel = portion || 'Standard';
         if (portion === 'Family Pack') basePrice += 750;
         if (portion === 'Jumbo Feast') basePrice += 1400;
 
-        let addonCost = addon ? 60 : 0; // e.g. Extra Mirchi ka Salan
+        let addonCost = addon ? 60 : 0;
         let finalUnitPrice = basePrice + addonCost;
 
         const cartKey = `${item.id}-${portionLabel}-${addon || 'none'}`;
@@ -162,65 +170,6 @@ app.get('/cart/remove/:cartKey', isAuthenticated, requireRole('customer'), (req,
     res.redirect('/cart');
 });
 
-// Dynamic Party Orders Storage Array
-let partyOrders = [];
-
-// --- CUSTOMER PARTY ORDER ROUTES ---
-app.get('/party-order', isAuthenticated, requireRole('customer'), (req, res) => {
-    res.render('customer/party-order', { outlets });
-});
-
-app.post('/submit-party-order', isAuthenticated, requireRole('customer'), (req, res) => {
-    const { name, phone, guests, deliveryDate, outletId, details } = req.body;
-
-    // Enforce Minimum Notice (48 Hours in Advance)
-    const orderDate = new Date(deliveryDate);
-    const minNoticeDate = new Date(Date.now() + 48 * 60 * 60 * 1000);
-
-    if (isNaN(orderDate.getTime()) || orderDate < minNoticeDate) {
-        return res.status(400).send(`
-            <h1>Invalid Delivery Date</h1>
-            <p>Party orders require a minimum of 48 hours advance notice for catering management preparation.</p>
-            <a href="/party-order">Go Back & Adjust Date</a>
-        `);
-    }
-
-    const newPartyOrder = {
-        id: 'PARTY-' + Math.floor(100000 + Math.random() * 900000),
-        customerName: name,
-        phone,
-        guests: parseInt(guests),
-        deliveryDate,
-        outletId,
-        details,
-        status: 'Pending Manager Confirmation',
-        createdAt: new Date().toLocaleString()
-    };
-
-    partyOrders.unshift(newPartyOrder);
-
-    // Notify Manager Dashboard in real time
-    io.emit('party-order-submitted', newPartyOrder);
-
-    res.render('customer/party-success', { partyOrder: newPartyOrder });
-});
-
-// --- ADMIN / CATERING MANAGER ROUTES ---
-app.get('/admin/dashboard', isAuthenticated, requireRole('admin'), (req, res) => {
-    res.render('admin/dashboard', { outlets, activeOrders, partyOrders });
-});
-
-// Catering Manager Action Route: Confirm Party Order
-app.post('/admin/confirm-party-order', isAuthenticated, requireRole('admin'), (req, res) => {
-    const { partyOrderId } = req.body;
-    const pOrder = partyOrders.find(p => p.id === partyOrderId);
-    if (pOrder) {
-        pOrder.status = 'Confirmed by Catering Manager';
-        io.emit('party-order-updated', pOrder);
-    }
-    res.redirect('/admin/dashboard');
-});
-
 app.get('/cart', isAuthenticated, requireRole('customer'), (req, res) => {
     const cart = req.session.cart || [];
     let itemTotal = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
@@ -228,7 +177,6 @@ app.get('/cart', isAuthenticated, requireRole('customer'), (req, res) => {
     res.render('customer/cart', { cart, itemTotal, currentOutlet });
 });
 
-// Place Order & Test Payment
 app.post('/place-order', isAuthenticated, requireRole('customer'), (req, res) => {
     const cart = req.session.cart || [];
     if (cart.length === 0) return res.redirect('/cart');
@@ -237,8 +185,7 @@ app.post('/place-order', isAuthenticated, requireRole('customer'), (req, res) =>
     const deliveryFee = 56;
     let discount = 0;
 
-    // Apply Coupon logic
-    if (req.body.coupon === 'HYDRA100') discount = 100;
+    if (req.body.coupon === 'HYDRA100') discount += 100;
     if (req.body.redeemed === 'true') discount += 24;
 
     const finalTotal = Math.max(0, itemTotal + deliveryFee - discount);
@@ -270,45 +217,135 @@ app.get('/order/:id', isAuthenticated, requireRole('customer'), (req, res) => {
     res.render('customer/order-status', { order });
 });
 
-// --- KITCHEN & ADMIN ROUTES ---
-app.get('/kitchen/:outletId', isAuthenticated, requireRole('kitchen'), (req, res) => {
-    if (req.session.user.outletId !== req.params.outletId) return res.status(403).send(`<h1>403 Forbidden</h1>`);
-    const outlet = outlets.find(o => o.id === req.params.outletId) || outlets[0];
-    const outletOrders = activeOrders.filter(o => o.outletId === outlet.id);
-    res.render('kitchen/kds', { outlet, outletOrders });
+// Party Order / Catering Requests
+app.get('/party-order', isAuthenticated, requireRole('customer'), (req, res) => {
+    res.render('customer/party-order', { outlets });
 });
 
+app.post('/submit-party-order', isAuthenticated, requireRole('customer'), (req, res) => {
+    const { name, phone, guests, deliveryDate, outletId, details } = req.body;
 
+    const orderDate = new Date(deliveryDate);
+    const minNoticeDate = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+    if (isNaN(orderDate.getTime()) || orderDate < minNoticeDate) {
+        return res.status(400).send(`
+            <h1>Invalid Delivery Date</h1>
+            <p>Party orders require a minimum of 48 hours advance notice for catering management preparation.</p>
+            <a href="/party-order">Go Back & Adjust Date</a>
+        `);
+    }
+
+    const newPartyOrder = {
+        id: 'PARTY-' + Math.floor(100000 + Math.random() * 900000),
+        customerName: name,
+        phone,
+        guests: parseInt(guests),
+        deliveryDate,
+        outletId,
+        details,
+        status: 'Pending Manager Confirmation',
+        createdAt: new Date().toLocaleString()
+    };
+
+    partyOrders.unshift(newPartyOrder);
+    io.emit('party-order-submitted', newPartyOrder);
+
+    res.render('customer/party-success', { partyOrder: newPartyOrder });
+});
+
+// ==========================================
+// KITCHEN TERMINAL ROUTES (KDS)
+// ==========================================
+app.get('/kitchen/:outletId', isAuthenticated, requireRole('kitchen'), (req, res) => {
+    if (req.session.user.outletId !== req.params.outletId) {
+        return res.status(403).send(`<h1>403 Forbidden</h1><p>Access denied.</p>`);
+    }
+    const outlet = outlets.find(o => o.id === req.params.outletId) || outlets[0];
+    
+    // Separate active tickets from rider handoff history log
+    const outletActiveOrders = activeOrders.filter(o => o.outletId === outlet.id && o.status !== 'Rider Handoff');
+    const outletHistoryOrders = activeOrders.filter(o => o.outletId === outlet.id && o.status === 'Rider Handoff');
+
+    res.render('kitchen/kds', { outlet, outletActiveOrders, outletHistoryOrders });
+});
+
+// ==========================================
+// ADMIN & MANAGER ROUTES
+// ==========================================
 app.get('/admin/dashboard', isAuthenticated, requireRole('admin'), (req, res) => {
-    res.render('admin/dashboard', { outlets, activeOrders });
+    res.render('admin/dashboard', { outlets, activeOrders, partyOrders });
+});
+
+app.post('/admin/confirm-party-order', isAuthenticated, requireRole('admin'), (req, res) => {
+    const { partyOrderId } = req.body;
+    const pOrder = partyOrders.find(p => p.id === partyOrderId);
+    if (pOrder) {
+        pOrder.status = 'Confirmed by Catering Manager';
+        io.emit('party-order-updated', pOrder);
+    }
+    res.redirect('/admin/dashboard');
 });
 
 app.get('/admin/cms', isAuthenticated, requireRole('admin'), (req, res) => {
     res.render('admin/cms', { menuItems, outlets });
 });
 
-// Inside server.js
+// --- KITCHEN HISTORY ROUTE (NEW TAB) ---
+app.get('/kitchen/:outletId/history', isAuthenticated, requireRole('kitchen'), (req, res) => {
+    if (req.session.user.outletId !== req.params.outletId) {
+        return res.status(403).send(`<h1>403 Forbidden</h1><p>Access denied.</p>`);
+    }
+    const outlet = outlets.find(o => o.id === req.params.outletId) || outlets[0];
+    const outletHistoryOrders = activeOrders.filter(o => o.outletId === outlet.id && o.status === 'Rider Handoff');
+
+    res.render('kitchen/history', { outlet, outletHistoryOrders });
+});
+
+// --- CUSTOMER PARTY ORDER HISTORY ROUTE ---
+app.get('/party-history', isAuthenticated, requireRole('customer'), (req, res) => {
+    // Filter party orders (in real production, match by user phone or ID)
+    const myPartyOrders = partyOrders;
+    res.render('customer/party-history', { partyOrders: myPartyOrders });
+});
+
+// --- CUSTOMER RECENT ORDERS HISTORY ROUTE ---
+app.get('/order-history', isAuthenticated, requireRole('customer'), (req, res) => {
+    // Retrieves active and past orders placed by the customer
+    const myOrders = activeOrders;
+    res.render('customer/order-history', { orders: myOrders });
+});
+
+// ==========================================
+// REAL-TIME WEBSOCKET SYNCHRONIZATION
+// ==========================================
 io.on('connection', (socket) => {
+    // Stage Transitions with Forward-Only Check
     socket.on('update-order-status', ({ orderId, status }) => {
         const order = activeOrders.find(o => o.id === orderId);
         if (order) {
             const stateRank = { 'Preparing': 1, 'Ready for pickup': 2, 'Rider Handoff': 3 };
-            if ((stateRank[status] || 1) < (stateRank[order.status] || 1)) return;
+            const currentRank = stateRank[order.status] || 1;
+            const newRank = stateRank[status] || 1;
+
+            if (newRank < currentRank) return; // Block backward transitions
+
             order.status = status;
             io.emit('order-updated', order);
         }
     });
 
-    // Handle Admin Stock Toggle
+    // CMS Real-time Stock Toggle
     socket.on('toggle-stock', ({ itemId }) => {
         const item = menuItems.find(i => i.id === itemId);
         if (item) {
             item.inStock = !item.inStock;
-            // Broadcast the entire updated menu to all connected clients (customers & admins)
             io.emit('menu-stock-updated', menuItems);
         }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Platform running at http://localhost:${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Platform running with RBAC & WebSockets at http://localhost:${PORT}`);
+});

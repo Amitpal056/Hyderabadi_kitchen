@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order History Log - <%= outlet.name %></title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-stone-950 text-stone-100 p-8 font-sans antialiased min-h-screen">
+    <header class="flex justify-between items-center mb-8 pb-6 border-b border-stone-800">
+        <div>
+            <span class="text-xs font-bold uppercase tracking-widest text-amber-500">Completed Orders Log</span>
+            <h1 class="text-3xl font-black tracking-tight text-stone-100 mt-1"><%= outlet.name %></h1>
+        </div>
+        <div class="bg-stone-900 border border-stone-800 px-6 py-3 rounded-2xl">
+            <span class="text-xs text-stone-400 uppercase font-bold block">Total Handoffs</span>
+            <span class="font-black text-blue-400 text-2xl font-mono"><%= outletHistoryOrders.length %></span>
+        </div>
+    </header>
+
+    <% if (outletHistoryOrders.length === 0) { %>
+        <div class="bg-stone-900 border border-stone-800 rounded-3xl p-16 text-center text-stone-500 max-w-xl mx-auto mt-20">
+            <p class="text-xl font-extrabold text-stone-400 mb-1">No Handoff History Yet</p>
+            <p class="text-xs">Orders marked as "Rider Handoff" from the active KDS board will appear here automatically.</p>
+        </div>
+    <% } else { %>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <% outletHistoryOrders.forEach(hOrder => { %>
+                <div class="bg-stone-900 border border-stone-800 rounded-2xl p-6 shadow-lg">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-stone-800">
+                        <span class="font-mono font-bold text-amber-400 text-lg"><%= hOrder.id %></span>
+                        <span class="text-[10px] font-bold px-2.5 py-1 rounded bg-blue-950 text-blue-400 uppercase tracking-widest">Rider Handoff</span>
+                    </div>
+                    <div class="space-y-2 mb-4">
+                        <% hOrder.items.forEach(hi => { %>
+                            <div class="flex justify-between text-sm text-stone-300">
+                                <span><strong class="text-stone-100 font-mono"><%= hi.qty %>x</strong> <%= hi.name %></span>
+                            </div>
+                        <% }) %>
+                    </div>
+                    <div class="flex justify-between items-center text-xs text-stone-500 pt-3 border-t border-stone-800">
+                        <span>Total Paid: ₹<%= hOrder.total %></span>
+                        <span><%= hOrder.createdAt %></span>
+                    </div>
+                </div>
+            <% }) %>
+        </div>
+    <% } %>
+
+    <script>
+        const socket = io();
+        socket.on('order-updated', () => window.location.reload());
+    </script>
+</body>
+</html>

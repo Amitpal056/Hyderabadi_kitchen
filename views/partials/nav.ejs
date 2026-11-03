@@ -1,23 +1,27 @@
-<nav class="bg-stone-900 text-white px-6 py-3 shadow-md flex justify-between items-center text-sm font-medium border-b border-stone-800">
-    <div class="flex items-center gap-6">
-        <span class="font-bold text-amber-500 text-base">Company A (<%= user ? user.name : 'Guest' %>)</span>
-        
+<nav class="bg-white border-b border-stone-200 px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center gap-4 sm:gap-6">
+        <a href="/" class="font-black text-xl tracking-tight text-amber-600">Company A Biryani</a>
         <% if (user && user.role === 'customer') { %>
-            <a href="/" class="hover:text-amber-400 transition">Customer Menu</a>
-            <a href="/cart" class="hover:text-amber-400 transition">Cart & Checkout</a>
-            <a href="/party-order" class="hover:text-amber-400 transition">Party Orders</a>
-        <% } %>
-
-        <% if (user && user.role === 'kitchen') { %>
-            <a href="/kitchen/<%= user.outletId %>" class="hover:text-amber-400 transition">Kitchen KDS (<%= user.outletId %>)</a>
+            <a href="/" class="text-xs font-bold text-stone-700 hover:text-amber-600">Menu</a>
+            <a href="/party-order" class="text-xs font-bold text-stone-700 hover:text-amber-600">Party Orders</a>
+            
+            <!-- Left Side: My Orders History Button -->
+            <a href="/order-history" class="text-xs font-bold text-stone-800 bg-stone-100 border border-stone-300 px-3 py-1.5 rounded-lg hover:bg-stone-200 transition">
+                📦 My Orders
+            </a>
+            
+            <!-- Right Side: Booked Party History Button -->
+            <a href="/party-history" class="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg hover:bg-amber-100 transition">
+                📋 Booked Party History
+            </a>
         <% } %>
     </div>
-
-    <div>
+    <div class="flex items-center gap-4">
         <% if (user) { %>
-            <a href="/logout" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition">Sign Out</a>
+            <span class="text-xs font-medium text-stone-500"><%= user.name %></span>
+            <a href="/logout" class="text-xs font-bold text-rose-600 hover:text-rose-800">Sign Out</a>
         <% } else { %>
-            <a href="/login" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs font-bold transition">Sign In</a>
+            <a href="/login" class="text-xs font-bold text-stone-900">Sign In</a>
         <% } %>
     </div>
 </nav>
