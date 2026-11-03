@@ -145,7 +145,11 @@ app.post('/cart/add', isAuthenticated, requireRole('customer'), (req, res) => {
             });
         }
     }
-    res.redirect('/');
+
+    const totalCartCount = (req.session.cart || []).reduce((acc, i) => acc + i.qty, 0);
+
+    // Return JSON instead of triggering a full page reload
+    res.json({ success: true, cartCount: totalCartCount });
 });
 
 app.get('/cart/decrease/:cartKey', isAuthenticated, requireRole('customer'), (req, res) => {
@@ -197,7 +201,7 @@ app.post('/place-order', isAuthenticated, requireRole('customer'), (req, res) =>
         total: finalTotal,
         payment: req.body.paymentMethod || 'UPI',
         status: 'Preparing',
-        isLate: false,
+        createdAtMs: Date.now(), // <-- Fixed timestamp that never changes on status clicks or reloads
         createdAt: new Date().toLocaleTimeString()
     };
 
