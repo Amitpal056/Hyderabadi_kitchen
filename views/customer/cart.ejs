@@ -38,7 +38,7 @@
                                     <div class="flex items-center border rounded-lg bg-stone-50 overflow-hidden">
                                         <a href="/cart/decrease/<%= item.cartKey %>" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">-</a>
                                         <span class="px-3 font-bold text-xs"><%= item.qty %></span>
-                                        <a href="/cart/add?itemId=<%= item.id %>&qty=1&portion=<%= item.portion %>&addon=<%= item.addon !== 'None' ? item.addon : '' %>" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">+</a>
+                                        <a href="/cart/increase/<%= encodeURIComponent(item.cartKey) %>" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">+</a>
                                     </div>
                                     <span class="font-semibold w-16 text-right">₹<%= item.price * item.qty %></span>
                                     <a href="/cart/remove/<%= item.cartKey %>" class="text-red-600 hover:text-red-800 text-xs font-bold px-2 py-1 bg-red-50 rounded transition">

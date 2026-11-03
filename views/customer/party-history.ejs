@@ -76,6 +76,9 @@
     <script>
         const socket = io();
         socket.on('party-order-updated', () => window.location.reload());
+        socket.on('party-order-deleted', (order) => {
+            if (order.email === '<%= user.email %>') window.location.reload();
+        });
     </script>
 </body>
 </html>

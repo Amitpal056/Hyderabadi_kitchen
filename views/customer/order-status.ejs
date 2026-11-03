@@ -14,7 +14,7 @@
                 <h1 class="text-2xl font-bold">Live Order Tracking</h1>
                 <span class="font-mono text-amber-600 font-bold text-sm"><%= order.id %></span>
             </div>
-            <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold uppercase"><%= order.status %></span>
+            <span id="order-status" class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold uppercase"><%= order.status %></span>
         </div>
 
         <div class="space-y-6 mb-8">
@@ -22,15 +22,20 @@
                 <div class="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center font-bold text-sm">✓</div>
                 <div>
                     <h4 class="font-bold text-sm">Order Confirmed & Routed</h4>
-                    <p class="text-xs text-stone-500">Sent straight to Kondapur kitchen screen</p>
+                    <p class="text-xs text-stone-500">Sent straight to <%= order.outletId || 'outlet' %> kitchen screen</p>
                 </div>
             </div>
             <div class="flex items-center gap-4">
                 <div class="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-sm animate-pulse">⏳</div>
                 <div>
-                    <h4 class="font-bold text-sm">Kitchen Prep (AI Estimated: 25 mins)</h4>
-                    <p class="text-xs text-stone-500">Promised delivery time calculated based on live kitchen load</p>
+                    <h4 id="prep-heading" class="font-bold text-sm"><%= order.status === 'In Progress' ? 'Order in progress — awaiting kitchen prep' : `Kitchen Prep (AI Estimated: ${order.aiPrepMinutes || 20} mins)` %></h4>
+                    <p class="text-xs text-stone-500">Promised ready by <strong><%= order.promisedAt ? new Date(order.promisedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'calculating...' %></strong></p>
                 </div>
+            </div>
+            <div class="rounded-xl bg-stone-50 border border-stone-200 p-4 text-xs text-stone-600">
+                <div class="flex justify-between"><span>AI estimate</span><span class="font-bold text-stone-900"><%= order.aiPrepMinutes || 20 %> mins</span></div>
+                <div class="flex justify-between mt-2"><span>Outlet minimum</span><span class="font-bold text-stone-900"><%= order.promisedMinutes && order.promisedMinutes > (order.aiPrepMinutes || 20) ? order.promisedMinutes - (order.aiPrepMinutes || 20) : 0 %> mins</span></div>
+                <div class="flex justify-between mt-2"><span>Promised time</span><span class="font-bold text-amber-700"><%= order.promisedAt ? new Date(order.promisedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending' %></span></div>
             </div>
         </div>
 
@@ -38,5 +43,17 @@
             Back to Menu
         </a>
     </main>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        socket.on('order-updated', (updatedOrder) => {
+            if (updatedOrder.id === '<%= order.id %>') {
+                document.getElementById('order-status').innerText = updatedOrder.status;
+                document.getElementById('prep-heading').innerText = updatedOrder.status === 'In Progress'
+                    ? 'Order in progress — awaiting kitchen prep'
+                    : `Kitchen Prep (AI Estimated: ${updatedOrder.aiPrepMinutes || 20} mins)`;
+            }
+        });
+    </script>
 </body>
 </html>

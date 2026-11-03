@@ -51,7 +51,7 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="kds-board">
             <% outletActiveOrders.forEach(order => { %>
-                <div class="bg-stone-900 border-2 border-stone-800 rounded-3xl p-6 flex flex-col justify-between shadow-2xl ticket-card" id="card-<%= order.id %>" data-created-ms="<%= order.createdAtMs || Date.now() %>">
+                <div class="bg-stone-900 border-2 border-stone-800 rounded-3xl p-6 flex flex-col justify-between shadow-2xl ticket-card" id="card-<%= order.id %>" data-created-ms="<%= order.prepStartedAt || order.createdAtMs || Date.now() %>" data-prep-started="<%= order.status === 'In Progress' ? 'false' : 'true' %>" data-prep-minutes="<%= order.promisedMinutes || order.aiPrepMinutes || 20 %>">
                     <div>
                         <!-- Order ID & Fixed Countdown Badge -->
                         <div class="flex justify-between items-start mb-5 pb-3 border-b border-stone-800">
@@ -64,8 +64,9 @@
                                     <%= order.status %>
                                 </span>
                                 <span class="font-mono text-sm text-emerald-400 font-extrabold timer-badge">
-                                    ⏱️ 45:00
+                                    <%= order.status === 'In Progress' ? 'Awaiting prep' : '⏱️ 45:00' %>
                                 </span>
+                                <span class="block text-[10px] text-stone-400 mt-1">AI prep: <%= order.aiPrepMinutes || 20 %> min</span>
                             </div>
                         </div>
 
@@ -83,26 +84,29 @@
                     <!-- Stage Controls (Forward-Only Guards) -->
                     <div class="space-y-2.5 pt-3 border-t border-stone-800">
                         <div class="grid grid-cols-2 gap-2">
+                            <% const hasStartedPrep = order.status !== 'In Progress'; %>
                             <% const isPastPrep = order.status === 'Ready for pickup' || order.status === 'Rider Handoff'; %>
                             <button 
                                 onclick="updateStatus('<%= order.id %>', 'Preparing')" 
-                                <%= isPastPrep ? 'disabled' : '' %>
-                                class="py-3 rounded-xl font-black text-xs uppercase tracking-wider transition <%= order.status === 'Preparing' ? 'bg-amber-600 text-white shadow-lg' : 'bg-stone-800 text-stone-400' %> <%= isPastPrep ? 'opacity-30 cursor-not-allowed' : 'hover:bg-amber-600 hover:text-white cursor-pointer' %>">
-                                Prep
+                                <%= hasStartedPrep ? 'disabled' : '' %>
+                                class="py-3 rounded-xl font-black text-xs uppercase tracking-wider transition <%= order.status === 'Preparing' ? 'bg-amber-600 text-white shadow-lg' : 'bg-stone-800 text-stone-400' %> <%= hasStartedPrep ? 'opacity-30 cursor-not-allowed' : 'hover:bg-amber-600 hover:text-white cursor-pointer' %>">
+                                <%= order.status === 'Preparing' ? 'Preparing' : 'Start Prep' %>
                             </button>
 
                             <% const isPastReady = order.status === 'Rider Handoff'; %>
+                            <% const canMarkReady = order.status === 'Preparing'; %>
                             <button 
                                 onclick="updateStatus('<%= order.id %>', 'Ready for pickup')" 
-                                <%= isPastReady ? 'disabled' : '' %>
-                                class="py-3 rounded-xl font-black text-xs uppercase tracking-wider transition <%= order.status === 'Ready for pickup' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-stone-800 text-stone-400' %> <%= isPastReady ? 'opacity-30 cursor-not-allowed' : 'hover:bg-emerald-600 hover:text-white cursor-pointer' %>">
+                                <%= !canMarkReady && order.status !== 'Ready for pickup' ? 'disabled' : '' %>
+                                class="py-3 rounded-xl font-black text-xs uppercase tracking-wider transition <%= order.status === 'Ready for pickup' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-stone-800 text-stone-400' %> <%= !canMarkReady && order.status !== 'Ready for pickup' ? 'opacity-30 cursor-not-allowed' : 'hover:bg-emerald-600 hover:text-white cursor-pointer' %>">
                                 Ready
                             </button>
                         </div>
 
                         <button 
                             onclick="updateStatus('<%= order.id %>', 'Rider Handoff')" 
-                            class="w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-wider transition bg-blue-600 hover:bg-blue-700 text-white shadow-lg cursor-pointer">
+                            <%= order.status !== 'Ready for pickup' ? 'disabled' : '' %>
+                            class="w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-wider transition bg-blue-600 hover:bg-blue-700 text-white shadow-lg <%= order.status !== 'Ready for pickup' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer' %>">
                             Rider Handoff (Complete)
                         </button>
                     </div>
@@ -118,7 +122,9 @@
             socket.emit('update-order-status', { orderId, status });
         }
 
-        socket.on('order-updated', () => window.location.reload());
+        socket.on('order-updated', (order) => {
+            if (order.outletId === '<%= outlet.id %>') window.location.reload();
+        });
         socket.on('new-order-received', (order) => {
             if (order.outletId === '<%= outlet.id %>') {
                 window.location.reload();
@@ -127,11 +133,15 @@
 
         // Continuous 45-Minute Timer Calculation based on Fixed Creation Time
         function updateTimers() {
-            const SLA_SECONDS = 45 * 60; // 45 Minutes
             const now = Date.now();
 
             document.querySelectorAll('.ticket-card').forEach(card => {
+                if (card.getAttribute('data-prep-started') !== 'true') {
+                    card.querySelector('.timer-badge').innerText = 'Awaiting prep';
+                    return;
+                }
                 const createdMs = parseInt(card.getAttribute('data-created-ms'), 10);
+                const SLA_SECONDS = (parseInt(card.getAttribute('data-prep-minutes'), 10) || 20) * 60;
                 const elapsedSecs = Math.floor((now - createdMs) / 1000);
                 const remainingSecs = SLA_SECONDS - elapsedSecs;
 

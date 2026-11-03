@@ -8,9 +8,17 @@
 <body class="bg-stone-900 text-stone-100 font-sans flex items-center justify-center h-screen">
     <div class="max-w-md w-full bg-stone-800 border border-stone-700 rounded-2xl p-8 shadow-xl">
         <h1 class="text-2xl font-bold mb-2 text-amber-500">Company A Portal</h1>
-        <p class="text-xs text-stone-400 mb-6">Select your role to sign in securely.</p>
+        <p class="text-xs text-stone-400 mb-6">Enter your Gmail to restore your customer profile and order history.</p>
+
+        <% if (typeof error !== 'undefined' && error) { %>
+            <p class="mb-4 rounded-lg border border-red-800 bg-red-950 p-3 text-xs text-red-200"><%= error %></p>
+        <% } %>
 
         <form action="/login" method="POST" class="space-y-5">
+            <div id="emailField">
+                <label class="block text-xs font-bold uppercase text-stone-300 mb-2" for="email">Gmail address</label>
+                <input type="email" name="email" id="email" autocomplete="email" placeholder="you@gmail.com" class="w-full bg-stone-900 border border-stone-700 rounded-lg p-3 text-sm text-stone-100 outline-none focus:border-amber-500">
+            </div>
             <div>
                 <label class="block text-xs font-bold uppercase text-stone-300 mb-2">Select User Role</label>
                 <select name="role" id="roleSelect" onchange="handleRoleChange()" class="w-full bg-stone-900 border border-stone-700 rounded-lg p-3 text-sm text-stone-100 outline-none focus:border-amber-500">
@@ -39,12 +47,22 @@
         function handleRoleChange() {
             const role = document.getElementById('roleSelect').value;
             const outletField = document.getElementById('outletField');
+            const emailField = document.getElementById('emailField');
+            const emailInput = document.getElementById('email');
             if (role === 'kitchen') {
                 outletField.classList.remove('hidden');
             } else {
                 outletField.classList.add('hidden');
             }
+            if (role === 'customer') {
+                emailField.classList.remove('hidden');
+                emailInput.required = true;
+            } else {
+                emailField.classList.add('hidden');
+                emailInput.required = false;
+            }
         }
+        handleRoleChange();
     </script>
 </body>
 </html>
