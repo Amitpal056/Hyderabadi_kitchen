@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Request Submitted - Company A</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-stone-50 text-stone-900 font-sans">
+    <%- include('../partials/nav') %>
+
+    <main class="max-w-xl mx-auto px-4 py-16 text-center">
+        <div class="bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
+            <div class="text-5xl mb-4">🎉</div>
+            <h1 class="text-2xl font-extrabold text-stone-900 mb-2">Party Request Received!</h1>
+            <p class="text-xs font-mono font-bold text-amber-600 mb-6"><%= partyOrder.id %></p>
+            
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left text-xs space-y-2 mb-6">
+                <p><strong>Guest Count:</strong> <%= partyOrder.guests %> people</p>
+                <p><strong>Scheduled Date:</strong> <%= new Date(partyOrder.deliveryDate).toLocaleString() %></p>
+                <p><strong>Current Status:</strong> <span class="bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded"><%= partyOrder.status %></span></p>
+            </div>
+
+            <p class="text-xs text-stone-500 mb-6">Our catering manager at the selected outlet is reviewing your menu requirements and notice schedule. You will receive a direct confirmation call shortly.</p>
+
+            <a href="/" class="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition">
+                Return to Home Menu
+            </a>
+        </div>
+    </main>
+</body>
+</html>

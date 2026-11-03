@@ -9,13 +9,13 @@
     <%- include('../partials/nav') %>
 
     <main class="max-w-3xl mx-auto px-4 py-10">
-        <h1 class="text-2xl font-bold mb-6">Review Your Cart & Pay Direct</h1>
+        <h1 class="text-2xl font-bold mb-6">Review Cart & Secure Checkout</h1>
         
         <% if (cart.length === 0) { %>
             <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-12 text-center">
                 <div class="text-4xl mb-3">🛒</div>
                 <h2 class="text-xl font-bold mb-2">Your cart is empty</h2>
-                <p class="text-sm text-stone-500 mb-6">Add delicious biryanis from the menu to get started.</p>
+                <p class="text-sm text-stone-500 mb-6">Pick an outlet and add your favorite biryani feast.</p>
                 <a href="/" class="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition">
                     Browse Menu
                 </a>
@@ -23,30 +23,38 @@
         <% } else { %>
             <form action="/place-order" method="POST" class="space-y-6">
                 <input type="hidden" name="redeemed" id="redeemed-input" value="false">
+                <input type="hidden" name="coupon" id="coupon-input" value="">
                 
                 <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
-                    <h2 class="font-semibold text-lg mb-4 border-b pb-2">Cart Items</h2>
+                    <h2 class="font-semibold text-lg mb-4 border-b pb-2">Cart Items (<%= currentOutlet.name %>)</h2>
                     <div class="space-y-4 mb-6">
                         <% cart.forEach(item => { %>
                             <div class="flex justify-between items-center text-sm border-b border-stone-100 pb-3">
                                 <div>
                                     <h4 class="font-bold"><%= item.name %></h4>
-                                    <span class="text-xs text-stone-500">₹<%= item.price %> per unit</span>
+                                    <span class="text-xs text-stone-500">Portion: <%= item.portion %> | Add-on: <%= item.addon %></span>
                                 </div>
                                 <div class="flex items-center gap-4">
                                     <div class="flex items-center border rounded-lg bg-stone-50 overflow-hidden">
-                                        <a href="/cart/decrease/<%= item.id %>" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">-</a>
+                                        <a href="/cart/decrease/<%= item.cartKey %>" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">-</a>
                                         <span class="px-3 font-bold text-xs"><%= item.qty %></span>
-                                        <a href="/cart/add?itemId=<%= item.id %>&qty=1" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">+</a>
+                                        <a href="/cart/add?itemId=<%= item.id %>&qty=1&portion=<%= item.portion %>&addon=<%= item.addon !== 'None' ? item.addon : '' %>" class="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 font-bold text-stone-700 transition">+</a>
                                     </div>
                                     <span class="font-semibold w-16 text-right">₹<%= item.price * item.qty %></span>
-                                    <a href="/cart/remove/<%= item.id %>" class="text-red-600 hover:text-red-800 text-xs font-bold px-2 py-1 bg-red-50 rounded transition">
+                                    <a href="/cart/remove/<%= item.cartKey %>" class="text-red-600 hover:text-red-800 text-xs font-bold px-2 py-1 bg-red-50 rounded transition">
                                         Remove
                                     </a>
                                 </div>
                             </div>
                         <% }) %>
                     </div>
+
+                    <!-- Coupon Code Input Box -->
+                    <div class="mb-6 bg-stone-50 border border-stone-200 p-4 rounded-xl flex gap-2">
+                        <input type="text" id="coupon-code" placeholder="Enter Coupon (e.g. HYDRA100)" class="flex-1 border rounded-lg px-3 py-2 text-xs uppercase outline-none bg-white font-mono">
+                        <button type="button" onclick="applyCoupon()" class="bg-stone-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-stone-800 transition cursor-pointer">Apply Coupon</button>
+                    </div>
+                    <p id="coupon-msg" class="text-xs text-green-700 font-semibold mb-4 hidden"></p>
 
                     <!-- Loyalty Rewards Section -->
                     <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex justify-between items-center">
@@ -64,8 +72,8 @@
                         <div class="flex justify-between"><span class="text-stone-600">Item Total</span><span>₹<%= itemTotal %></span></div>
                         <div class="flex justify-between"><span class="text-stone-600">Delivery Fee</span><span>₹56</span></div>
                         <div id="discount-row" class="flex justify-between text-green-700 font-medium hidden">
-                            <span>Loyalty Discount Applied</span>
-                            <span>-₹24</span>
+                            <span>Discount Applied</span>
+                            <span id="discount-val">-₹24</span>
                         </div>
                         <div class="flex justify-between text-xs text-stone-400"><span>Includes 5% GST</span><span>Calculated at checkout</span></div>
                         <div class="flex justify-between font-extrabold text-base pt-2 border-t border-stone-200">
@@ -75,22 +83,23 @@
                     </div>
                 </div>
 
+                <!-- Test Payment Methods (UPI & Card) -->
                 <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
-                    <h2 class="font-semibold text-lg mb-4">Payment Method (Test Mode)</h2>
+                    <h2 class="font-semibold text-lg mb-4">Payment Method (Test Gateway)</h2>
                     <div class="grid grid-cols-2 gap-4">
                         <label class="border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-amber-600">
-                            <input type="radio" name="paymentMethod" value="UPI" checked class="text-amber-600">
+                            <input type="radio" name="paymentMethod" value="UPI (GPay/PhonePe)" checked class="text-amber-600">
                             <span class="font-medium text-sm">UPI (GPay / PhonePe)</span>
                         </label>
                         <label class="border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-amber-600">
-                            <input type="radio" name="paymentMethod" value="Card" class="text-amber-600">
+                            <input type="radio" name="paymentMethod" value="Credit/Debit Card" class="text-amber-600">
                             <span class="font-medium text-sm">Credit / Debit Card</span>
                         </label>
                     </div>
                 </div>
 
                 <button type="submit" id="pay-btn" class="w-full bg-amber-600 hover:bg-amber-700 text-white text-center py-3.5 rounded-xl font-bold shadow-md transition cursor-pointer">
-                    Pay & Place Secure Direct Order (₹<%= itemTotal + 56 %>)
+                    Pay Test Amount & Place Direct Order (₹<%= itemTotal + 56 %>)
                 </button>
             </form>
         <% } %>
@@ -98,22 +107,43 @@
 
     <script>
         let baseTotal = <%= cart.length > 0 ? itemTotal + 56 : 0 %>;
+        let discountTotal = 0;
         let isRedeemed = false;
 
         function redeemPoints() {
             if (!isRedeemed) {
                 isRedeemed = true;
+                discountTotal += 24;
                 baseTotal -= 24;
-                document.getElementById('final-total').innerText = `₹${baseTotal}`;
-                document.getElementById('discount-row').classList.remove('hidden');
+                updateTotals();
                 document.getElementById('redeemed-input').value = 'true';
                 
                 const btn = document.getElementById('redeem-btn');
                 btn.innerText = 'Applied (₹24 off)';
                 btn.classList.replace('bg-amber-600', 'bg-green-700');
-                
-                document.getElementById('pay-btn').innerText = `Pay & Place Secure Direct Order (₹${baseTotal})`;
             }
+        }
+
+        function applyCoupon() {
+            const code = document.getElementById('coupon-code').value.trim().toUpperCase();
+            const msg = document.getElementById('coupon-msg');
+            if (code === 'HYDRA100') {
+                discountTotal += 100;
+                baseTotal -= 100;
+                updateTotals();
+                document.getElementById('coupon-input').value = 'HYDRA100';
+                msg.innerText = 'Coupon HYDRA100 applied successfully (-₹100)';
+                msg.classList.remove('hidden');
+            } else {
+                alert('Invalid Coupon Code. Try HYDRA100');
+            }
+        }
+
+        function updateTotals() {
+            document.getElementById('final-total').innerText = `₹${Math.max(0, baseTotal)}`;
+            document.getElementById('discount-val').innerText = `-₹${discountTotal}`;
+            document.getElementById('discount-row').classList.remove('hidden');
+            document.getElementById('pay-btn').innerText = `Pay Test Amount & Place Direct Order (₹${Math.max(0, baseTotal)})`;
         }
     </script>
 </body>

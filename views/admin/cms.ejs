@@ -2,66 +2,77 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Menu CMS - Company A</title>
+    <title>Menu CMS - Company A Platform</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body class="bg-stone-100 text-stone-900 font-sans">
     <%- include('../partials/nav') %>
 
-    <div class="max-w-7xl mx-auto p-8">
-        <header class="flex justify-between items-center mb-8">
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-8">
             <div>
-                <h1 class="text-3xl font-bold">Central Menu CMS</h1>
-                <p class="text-sm text-stone-500">Manage item pricing, availability, and instant 86-ing across outlets</p>
+                <h1 class="text-3xl font-extrabold tracking-tight">Central Menu CMS</h1>
+                <p class="text-xs text-stone-500 mt-1">Manage live item availability and stock status across all outlets</p>
             </div>
-        </header>
-
-        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <table class="w-full text-left text-sm">
-                <thead class="bg-stone-50 text-stone-400 uppercase text-xs">
-                    <tr>
-                        <th class="p-4">Item Name</th>
-                        <th class="p-4">Price (Inc. 5% GST)</th>
-                        <th class="p-4">Type</th>
-                        <th class="p-4">Stock Status</th>
-                        <th class="p-4">Action</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-stone-100">
-                    <% menuItems.forEach(item => { %>
-                        <tr>
-                            <td class="p-4 font-bold"><%= item.name %></td>
-                            <td class="p-4 font-mono">₹<%= item.price %></td>
-                            <td class="p-4">
-                                <span class="text-xs px-2 py-0.5 rounded font-bold <%= item.isVeg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
-                                    <%= item.isVeg ? 'VEG' : 'NON-VEG' %>
-                                </span>
-                            </td>
-                            <td class="p-4">
-                                <span id="status-<%= item.id %>" class="px-2 py-1 rounded text-xs font-bold <%= item.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
-                                    <%= item.inStock ? 'IN STOCK' : 'OUT OF STOCK (86-ed)' %>
-                                </span>
-                            </td>
-                            <td class="p-4">
-                                <button onclick="toggleStock('<%= item.id %>')" class="bg-stone-800 hover:bg-stone-700 text-white px-3 py-1.5 rounded text-xs font-bold transition">
-                                    Toggle Stock
-                                </button>
-                            </td>
-                        </tr>
-                    <% }) %>
-                </tbody>
-            </table>
+            <a href="/admin/dashboard" class="text-xs font-bold text-amber-600 bg-white border border-stone-200 px-4 py-2 rounded-xl shadow-sm">
+                ← Back to Dashboard
+            </a>
         </div>
-    </div>
+
+        <!-- Menu Management Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <% menuItems.forEach(item => { %>
+                <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <img src="<%= item.image %>" alt="<%= item.name %>" class="h-40 w-full object-cover rounded-xl mb-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-lg"><%= item.name %></h3>
+                            <span class="font-extrabold text-amber-600">₹<%= item.price %></span>
+                        </div>
+                        <p class="text-xs text-stone-500 mb-4"><%= item.description %></p>
+                    </div>
+
+                    <div class="pt-4 border-t border-stone-100 flex justify-between items-center">
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-full <%= item.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>" id="status-badge-<%= item.id %>">
+                            <%= item.inStock ? 'In Stock' : 'Sold Out' %>
+                        </span>
+
+                        <button onclick="toggleStock('<%= item.id %>')" class="px-4 py-2 rounded-xl text-xs font-bold transition shadow cursor-pointer <%= item.inStock ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white' %>" id="btn-<%= item.id %>">
+                            <%= item.inStock ? 'Mark Sold Out' : 'Mark In Stock' %>
+                        </button>
+                    </div>
+                </div>
+            <% }) %>
+        </div>
+    </main>
 
     <script>
         const socket = io();
+
         function toggleStock(itemId) {
             socket.emit('toggle-stock', { itemId });
         }
-        socket.on('menu-updated', () => {
-            window.location.reload();
+
+        // Listen for live updates and refresh UI dynamically
+        socket.on('menu-stock-updated', (updatedItems) => {
+            updatedItems.forEach(item => {
+                const badge = document.getElementById(`status-badge-${item.id}`);
+                const btn = document.getElementById(`btn-${item.id}`);
+                if (badge && btn) {
+                    if (item.inStock) {
+                        badge.innerText = 'In Stock';
+                        badge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-800';
+                        btn.innerText = 'Mark Sold Out';
+                        btn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition shadow cursor-pointer bg-red-600 hover:bg-red-700 text-white';
+                    } else {
+                        badge.innerText = 'Sold Out';
+                        badge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800';
+                        btn.innerText = 'Mark In Stock';
+                        btn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition shadow cursor-pointer bg-green-600 hover:bg-green-700 text-white';
+                    }
+                }
+            });
         });
     </script>
 </body>

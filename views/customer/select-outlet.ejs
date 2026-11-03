@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Select Delivery Outlet - Company A</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-stone-900 text-stone-100 flex items-center justify-center h-screen font-sans">
+    <div class="max-w-md w-full bg-stone-800 border border-stone-700 rounded-2xl p-8 shadow-xl">
+        <h1 class="text-2xl font-bold mb-2 text-amber-500">Select Your Nearest Outlet</h1>
+        <p class="text-xs text-stone-400 mb-6">We route your order directly to the closest kitchen within delivery radius for maximum freshness.</p>
+
+        <form action="/select-outlet" method="POST" class="space-y-4">
+            <% outlets.forEach((outlet, index) => { %>
+                <label class="block border border-stone-700 hover:border-amber-500 rounded-xl p-4 cursor-pointer bg-stone-900 transition">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-bold text-stone-100"><%= outlet.name %></span>
+                        <input type="radio" name="outletId" value="<%= outlet.id %>" <%= index === 0 ? 'checked' : '' %> class="text-amber-600">
+                    </div>
+                    <span class="text-xs text-amber-400 font-mono">Delivery Radius: <%= outlet.radius %></span>
+                </label>
+            <% }) %>
+
+            <button type="submit" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-md mt-4 cursor-pointer">
+                Confirm Outlet & View Menu
+            </button>
+        </form>
+    </div>
+</body>
+</html>
