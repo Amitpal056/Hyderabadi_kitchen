@@ -21,8 +21,8 @@
             <div class="flex items-center gap-4">
                 <div class="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center font-bold text-sm">✓</div>
                 <div>
-                    <h4 class="font-bold text-sm">Order Confirmed & Routed</h4>
-                    <p class="text-xs text-stone-500">Sent straight to <%= order.outletId || 'outlet' %> kitchen screen</p>
+                    <h4 class="font-bold text-sm"><%= order.paymentStatus === 'Paid' || order.paymentStatus === 'Test payment approved' ? 'Order Confirmed & Routed' : 'Waiting for PhonePe payment' %></h4>
+                    <p class="text-xs text-stone-500"><%= order.paymentStatus === 'Paid' || order.paymentStatus === 'Test payment approved' ? `Sent straight to ${order.outletId || 'outlet'} kitchen screen` : `Payment status: ${order.paymentStatus}. The kitchen receives your order after payment is confirmed.` %></p>
                 </div>
             </div>
             <div class="flex items-center gap-4">
@@ -38,6 +38,17 @@
                 <div class="flex justify-between mt-2"><span>Promised time</span><span class="font-bold text-amber-700"><%= order.promisedAt ? new Date(order.promisedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending' %></span></div>
             </div>
         </div>
+
+        <% if (order.paymentStatus === 'Failed' || order.paymentStatus === 'Initiation Failed') { %>
+            <div class="mb-6 rounded-xl bg-rose-50 border border-rose-200 p-4 text-sm text-rose-800">
+                PhonePe did not complete this payment. Your cart was kept so you can return to checkout and try again.
+            </div>
+            <a href="/cart" class="block text-center bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl text-sm transition mb-3">Return to Checkout</a>
+        <% } else if (order.paymentStatus === 'Pending') { %>
+            <div class="mb-6 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+                Payment is not confirmed yet. Refresh this page after completing checkout in PhonePe.
+            </div>
+        <% } %>
 
         <a href="/" class="block text-center bg-stone-900 hover:bg-stone-800 text-white font-bold py-3 rounded-xl text-sm transition">
             Back to Menu

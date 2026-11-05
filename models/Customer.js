@@ -14,6 +14,7 @@ const customerSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   name: { type: String, default: 'Customer' },
   phone: { type: String, default: '' },
+  smsOptIn: { type: Boolean, default: false },
   preferredOutlet: { type: String, default: 'kondapur' },
   cart: { type: [cartItemSchema], default: [] }
 }, { timestamps: true, collection: 'customers' });

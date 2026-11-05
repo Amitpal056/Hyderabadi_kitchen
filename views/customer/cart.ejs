@@ -83,29 +83,48 @@
                     </div>
                 </div>
 
-                <!-- Test Payment Methods (UPI & Card) -->
+                <!-- Order notification preferences -->
                 <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
-                    <h2 class="font-semibold text-lg mb-4">Payment Method (Test Gateway)</h2>
-                    <div class="grid grid-cols-2 gap-4">
-                        <label class="border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-amber-600">
-                            <input type="radio" name="paymentMethod" value="UPI (GPay/PhonePe)" checked class="text-amber-600">
-                            <span class="font-medium text-sm">UPI (GPay / PhonePe)</span>
-                        </label>
-                        <label class="border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-amber-600">
-                            <input type="radio" name="paymentMethod" value="Credit/Debit Card" class="text-amber-600">
-                            <span class="font-medium text-sm">Credit / Debit Card</span>
-                        </label>
+                    <h2 class="font-semibold text-lg mb-2">Order updates by SMS</h2>
+                    <p class="text-xs text-stone-500 mb-4">Your order will be sent to <strong><%= currentOutlet.name %></strong>. Enter an Indian mobile number.</p>
+                    <% if (smsConfigured) { %>
+                        <p class="text-xs text-emerald-700 mb-4">SMS status updates are available when you opt in.</p>
+                    <% } else { %>
+                        <p class="text-xs text-amber-700 mb-4">SMS delivery is not configured yet. Orders work normally; messages will be enabled after Twilio SMS setup.</p>
+                    <% } %>
+                    <label class="block text-xs font-bold uppercase text-stone-600 mb-1" for="phone">Mobile number for SMS (optional)</label>
+                    <div class="flex items-center border rounded-lg bg-stone-50 mb-4">
+                        <span class="px-3 py-2.5 text-sm text-stone-500 border-r">+91</span>
+                        <input id="phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" pattern="[6-9][0-9]{9}" value="<%= customerPhone.replace(/\D/g, '').replace(/^91/, '') %>" placeholder="9876543210" <%= customerSmsOptIn ? 'required' : '' %> class="flex-1 bg-transparent px-3 py-2.5 text-sm outline-none">
                     </div>
+                    <label class="flex items-start gap-2 text-xs text-stone-600 mb-6">
+                        <input id="sms-opt-in" type="checkbox" name="smsOptIn" value="yes" <%= customerSmsOptIn ? 'checked' : '' %> class="mt-0.5">
+                        <span>I agree to receive SMS text messages about this order, including confirmation, preparation status, and delays. Message and data rates may apply.</span>
+                    </label>
+
+                    <h2 class="font-semibold text-lg mb-2">Payment with PhonePe</h2>
+                    <p class="text-xs text-stone-500">Continue to PhonePe’s secure checkout to pay by UPI, card, or other enabled methods.</p>
+                    <% if (phonePeConfigured) { %>
+                        <p class="text-xs text-emerald-700 mt-2">PhonePe <%= phonePeEnvironment === 'production' ? 'production' : 'sandbox' %> checkout is configured.</p>
+                    <% } else { %>
+                        <p class="text-xs text-amber-700 mt-2">PhonePe is not configured. Add PHONEPAY_CLIENT_ID and PHONEPAY_CLIENT_SECRET to the server’s .env file.</p>
+                    <% } %>
                 </div>
 
-                <button type="submit" id="pay-btn" class="w-full bg-amber-600 hover:bg-amber-700 text-white text-center py-3.5 rounded-xl font-bold shadow-md transition cursor-pointer">
-                    Pay Test Amount & Place Direct Order (₹<%= itemTotal + 56 %>)
+                <button type="submit" id="pay-btn" <%= phonePeConfigured ? '' : 'disabled' %> class="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-stone-400 disabled:cursor-not-allowed text-white text-center py-3.5 rounded-xl font-bold shadow-md transition cursor-pointer">
+                    <%= phonePeConfigured ? `Continue to PhonePe (₹${itemTotal + 56})` : 'PhonePe checkout unavailable' %>
                 </button>
             </form>
         <% } %>
     </main>
 
     <script>
+        const smsOptInInput = document.getElementById('sms-opt-in');
+        const phoneInput = document.getElementById('phone');
+        smsOptInInput.addEventListener('change', () => {
+            phoneInput.required = smsOptInInput.checked;
+        });
+
         let baseTotal = <%= cart.length > 0 ? itemTotal + 56 : 0 %>;
         let discountTotal = 0;
         let isRedeemed = false;
@@ -143,7 +162,7 @@
             document.getElementById('final-total').innerText = `₹${Math.max(0, baseTotal)}`;
             document.getElementById('discount-val').innerText = `-₹${discountTotal}`;
             document.getElementById('discount-row').classList.remove('hidden');
-            document.getElementById('pay-btn').innerText = `Pay Test Amount & Place Direct Order (₹${Math.max(0, baseTotal)})`;
+            document.getElementById('pay-btn').innerText = `Continue to PhonePe (₹${Math.max(0, baseTotal)})`;
         }
     </script>
 </body>

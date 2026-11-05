@@ -5,6 +5,8 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const { Order, PartyOrder, Customer, MenuItem } = require('./models');
+const { sendOrderSMS } = require('./services/twilioSms');
+const { createPayment, getPaymentStatus, isPhonePeConfigured } = require('./services/phonePe');
 
 let outlets = [], menuItems = [];
 try {
@@ -72,8 +74,11 @@ async function persistCustomerProfile(req, updates = {}) {
     );
 }
 
-function getCustomerPhone(req) {
-    return req.session.user && req.session.user.phone ? req.session.user.phone : (req.body && req.body.phone) || '';
+function normalizeIndianMobileNumber(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (/^[6-9]\d{9}$/.test(digits)) return `91${digits}`;
+    if (/^91[6-9]\d{9}$/.test(digits)) return digits;
+    return null;
 }
 
 function getCustomerName(req) {
@@ -81,8 +86,6 @@ function getCustomerName(req) {
 }
 
 function getPreferredOutlet(req) {
-    const explicit = req.body && req.body.outletId;
-    if (outlets.some(outlet => outlet.id === explicit)) return explicit;
     if (outlets.some(outlet => outlet.id === req.session.selectedOutlet)) return req.session.selectedOutlet;
     if (outlets.some(outlet => outlet.id === req.session.user.preferredOutlet)) return req.session.user.preferredOutlet;
     return outlets[0].id;
@@ -125,7 +128,11 @@ function buildAiSuggestions(customerId, outletId) {
 
 function calculateAiPrepMinutes(outletId, items = []) {
     const outlet = getOutlet(outletId);
-    const queueLoad = activeOrders.filter(order => order.outletId === outletId && order.status !== 'Rider Handoff').length;
+    const queueLoad = activeOrders.filter(order =>
+        order.outletId === outletId &&
+        order.status !== 'Rider Handoff' &&
+        isOrderPaid(order)
+    ).length;
     const complexity = (items || []).reduce((sum, item) => {
         const match = menuItems.find(menuItem => item.name.toLowerCase().includes(menuItem.name.toLowerCase()) || menuItem.name.toLowerCase().includes(item.name.toLowerCase()));
         const itemWeight = match ? (match.isVeg ? 4 : 6) : 4;
@@ -136,34 +143,95 @@ function calculateAiPrepMinutes(outletId, items = []) {
     return Math.max(outlet.minPrepMinutes || 15, estimate);
 }
 
+function isOrderPaid(order) {
+    return order.paymentStatus === 'Paid' || order.paymentStatus === 'Test payment approved';
+}
+
 function formatPromise(value) {
     if (!value) return 'Not available';
     const date = new Date(value);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function sendStatusNotification(order, message, channelOverride) {
-    const phone = order.phone;
-    if (!phone) {
-        console.warn(`No phone number available for order ${order.id}; notification was not sent.`);
-        return null;
-    }
-    const channel = channelOverride || (process.env.WHATSAPP_API_TOKEN ? 'WhatsApp' : 'SMS');
-    const payload = {
-        to: phone,
-        type: channel,
-        message,
-        orderId: order.id,
-        outletId: order.outletId
-    };
+function isSmsConfigured() {
+    return Boolean(
+        process.env.TWILIO_ACCOUNT_SID &&
+        process.env.TWILIO_AUTH_TOKEN &&
+        process.env.TWILIO_SMS_FROM
+    );
+}
 
-    if (process.env.WHATSAPP_API_TOKEN || process.env.SMS_GATEWAY_API_KEY) {
-        console.log('[notification]', JSON.stringify(payload));
-        return payload;
+async function sendStatusNotification(order, message) {
+    if (!order.smsOptIn) return;
+    if (!order.phone) {
+        console.warn(`SMS update skipped for order ${order.id}: no opted-in recipient.`);
+        return;
     }
 
-    console.log('[mock notification]', JSON.stringify(payload));
-    return payload;
+    try {
+        const result = await sendOrderSMS({
+            to: order.phone,
+            orderId: order.id,
+            message
+        });
+        if (!result.sent) {
+            console.warn(`SMS update not sent for order ${order.id}; configure ${result.missingSettings.join(', ')}.`);
+            return;
+        }
+        console.log(`SMS update accepted by Twilio for order ${order.id} (message ${result.messageId || 'accepted'}).`);
+    } catch (error) {
+        console.error(`SMS update failed for order ${order.id}:`, error.message);
+    }
+}
+
+async function syncPhonePeOrderStatus(order, req) {
+    const paymentStatus = await getPaymentStatus({ merchantOrderId: order.id });
+    if (!paymentStatus.checked) {
+        throw new Error(`Missing PhonePe settings: ${paymentStatus.missingSettings.join(', ')}`);
+    }
+    if (paymentStatus.amount !== undefined && paymentStatus.amount !== Math.round(order.total * 100)) {
+        throw new Error(`PhonePe payment amount mismatch for order ${order.id}.`);
+    }
+
+    if (paymentStatus.state === 'COMPLETED' && order.paymentStatus !== 'Paid') {
+        order.paymentStatus = 'Paid';
+        order.status = 'In Progress';
+        order.aiPrepMinutes = calculateAiPrepMinutes(
+            order.outletId,
+            order.items.map(item => ({ name: item.name, qty: item.qty }))
+        );
+        order.promisedMinutes = Math.max(
+            order.aiPrepMinutes,
+            getOutlet(order.outletId).minPrepMinutes || 15
+        );
+        order.promisedAt = new Date(Date.now() + order.promisedMinutes * 60000).toISOString();
+        order.createdAtMs = Date.now();
+        order.createdAt = new Date(order.createdAtMs).toLocaleTimeString();
+        await order.save();
+
+        const orderObject = order.toObject();
+        activeOrders = [orderObject, ...activeOrders.filter(activeOrder => activeOrder.id !== order.id)];
+        io.emit('new-order-received', orderObject);
+        await sendStatusNotification(orderObject, `Order ${order.id} is confirmed at ${getOutlet(order.outletId).name}. Promised ready by ${formatPromise(order.promisedAt)}.`);
+
+        req.session.cart = [];
+        req.session.user.phone = order.phone || '';
+        req.session.user.smsOptIn = order.smsOptIn;
+        try {
+            await persistCustomerProfile(req, {
+                phone: order.phone || '',
+                smsOptIn: order.smsOptIn
+            });
+        } catch (error) {
+            console.error('Failed to save cleared customer cart after payment:', error.message);
+        }
+    } else if (paymentStatus.state === 'FAILED' && order.paymentStatus === 'Pending') {
+        order.paymentStatus = 'Failed';
+        order.status = 'Payment Failed';
+        await order.save();
+    }
+
+    return paymentStatus.state;
 }
 
 async function fetchOrdersFromDb() {
@@ -248,6 +316,7 @@ app.post('/login', async (req, res) => {
                 customerId: String(customer._id),
                 email: customer.email,
                 phone: customer.phone || '',
+                smsOptIn: customer.smsOptIn || false,
                 preferredOutlet: customer.preferredOutlet || outlets[0].id
             };
             req.session.cart = customer.cart || [];
@@ -430,16 +499,29 @@ app.get('/cart', isAuthenticated, requireRole('customer'), (req, res) => {
     const cart = req.session.cart || [];
     const itemTotal = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
     const currentOutlet = getOutlet(req.session.selectedOutlet || req.session.user.preferredOutlet || outlets[0].id);
-    res.render('customer/cart', { cart, itemTotal, currentOutlet });
+    res.render('customer/cart', {
+        cart,
+        itemTotal,
+        currentOutlet,
+        customerPhone: req.session.user.phone || '',
+        customerSmsOptIn: req.session.user.smsOptIn || false,
+        smsConfigured: isSmsConfigured(),
+        phonePeConfigured: isPhonePeConfigured(),
+        phonePeEnvironment: String(process.env.PHONEPAY_ENV || 'sandbox').toLowerCase()
+    });
 });
 
 app.post('/place-order', isAuthenticated, requireRole('customer'), async (req, res) => {
     const cart = req.session.cart || [];
     if (cart.length === 0) return res.redirect('/cart');
-    const paymentMethods = ['UPI (GPay/PhonePe)', 'Credit/Debit Card'];
-    const paymentMethod = String(req.body.paymentMethod || '');
-    if (!paymentMethods.includes(paymentMethod)) {
-        return res.status(400).send('Choose a valid test payment method.');
+    if (!isPhonePeConfigured()) {
+        return res.status(503).send('PhonePe is not configured. Add PHONEPAY_CLIENT_ID and PHONEPAY_CLIENT_SECRET to .env and restart the app.');
+    }
+    const rawPhone = String(req.body.phone || '').trim();
+    const customerPhone = normalizeIndianMobileNumber(rawPhone || req.session.user.phone);
+    const smsOptIn = req.body.smsOptIn === 'yes';
+    if ((rawPhone && !customerPhone) || (smsOptIn && !customerPhone)) {
+        return res.status(400).send('Enter a valid Indian mobile number to receive SMS order updates.');
     }
 
     try {
@@ -468,7 +550,6 @@ app.post('/place-order', isAuthenticated, requireRole('customer'), async (req, r
     const promisedMinutes = Math.max(aiPrepMinutes, outlet.minPrepMinutes || 15);
     const promisedAt = new Date(Date.now() + promisedMinutes * 60000).toISOString();
     const customerId = getCustomerId(req);
-    const customerPhone = getCustomerPhone(req);
 
     const newOrder = {
         id: orderId,
@@ -476,12 +557,13 @@ app.post('/place-order', isAuthenticated, requireRole('customer'), async (req, r
         email: getCustomerEmail(req),
         customerName: getCustomerName(req),
         phone: customerPhone,
+        smsOptIn,
         outletId,
         items: cart.map(item => ({ qty: item.qty, name: `${item.name} (${item.portion})${item.addon !== 'None' ? ' + ' + item.addon : ''}` })),
         total: finalTotal,
-        payment: paymentMethod,
-        paymentStatus: 'Test payment approved',
-        status: 'In Progress',
+        payment: 'PhonePe',
+        paymentStatus: 'Pending',
+        status: 'Payment Pending',
         aiPrepMinutes,
         promisedMinutes,
         promisedAt,
@@ -489,32 +571,89 @@ app.post('/place-order', isAuthenticated, requireRole('customer'), async (req, r
         createdAt: new Date().toLocaleTimeString()
     };
 
+    let order;
     try {
-        const savedOrder = await Order.create(newOrder);
-        activeOrders = [savedOrder.toObject(), ...activeOrders];
-        io.emit('new-order-received', savedOrder.toObject());
-        sendStatusNotification(savedOrder.toObject(), `Order ${savedOrder.id} confirmed for ${savedOrder.outletId}. Promised ready by ${formatPromise(savedOrder.promisedAt)}.`);
+        order = await Order.create(newOrder);
     } catch (error) {
         console.error('Failed to save order to MongoDB:', error.message);
         return res.status(503).send('Could not place your order. Your cart has been kept; please try again.');
     }
 
-    req.session.cart = [];
+    let payment;
     try {
-        await persistCustomerProfile(req);
+        const phonePeEnvironment = String(process.env.PHONEPAY_ENV || 'sandbox').toLowerCase();
+        const appBaseUrl = (process.env.APP_BASE_URL || (
+            phonePeEnvironment === 'sandbox' ? `http://localhost:${process.env.PORT || 3000}` : ''
+        )).replace(/\/+$/, '');
+        if (!appBaseUrl) {
+            throw new Error('APP_BASE_URL is required for PhonePe production checkout.');
+        }
+        const appBase = new URL(appBaseUrl);
+        if (phonePeEnvironment === 'production' && appBase.protocol !== 'https:') {
+            throw new Error('APP_BASE_URL must use HTTPS for PhonePe production checkout.');
+        }
+        const redirectUrl = new URL('/payment/phonepe/return', appBaseUrl);
+        redirectUrl.searchParams.set('merchantOrderId', orderId);
+        payment = await createPayment({
+            merchantOrderId: orderId,
+            amountPaise: Math.round(finalTotal * 100),
+            redirectUrl: redirectUrl.toString()
+        });
+        if (!payment.created) {
+            throw new Error(`Missing PhonePe settings: ${payment.missingSettings.join(', ')}`);
+        }
+        order.paymentProviderOrderId = payment.providerOrderId;
     } catch (error) {
-        console.error('Failed to save cleared customer cart:', error.message);
+        order.paymentStatus = 'Initiation Failed';
+        order.status = 'Payment Failed';
+        try {
+            await order.save();
+        } catch (saveError) {
+            console.error(`Failed to update order ${orderId} after PhonePe checkout error:`, saveError.message);
+        }
+        console.error(`PhonePe checkout could not be started for order ${orderId}:`, error.message);
+        return res.status(502).send('PhonePe checkout could not be started. Your cart is unchanged; please try again.');
     }
-    res.redirect(`/order/${orderId}`);
+
+    try {
+        await order.save();
+    } catch (error) {
+        console.error(`Failed to save PhonePe provider reference for order ${orderId}:`, error.message);
+    }
+    res.redirect(payment.redirectUrl);
+});
+
+app.get('/payment/phonepe/return', isAuthenticated, requireRole('customer'), async (req, res) => {
+    const merchantOrderId = String(req.query.merchantOrderId || '');
+    if (!/^WEB-\d{6}$/.test(merchantOrderId)) {
+        return res.status(400).send('Invalid PhonePe order reference.');
+    }
+
+    try {
+        const order = await Order.findOne({
+            id: merchantOrderId,
+            email: getCustomerEmail(req)
+        });
+        if (!order) return res.status(404).send('Order not found.');
+
+        await syncPhonePeOrderStatus(order, req);
+        return res.redirect(`/order/${order.id}`);
+    } catch (error) {
+        console.error('Failed to verify PhonePe payment:', error.message);
+        return res.status(503).send('Could not verify your PhonePe payment. Please refresh this page to retry verification.');
+    }
 });
 
 app.get('/order/:id', isAuthenticated, requireRole('customer'), async (req, res) => {
     try {
-        const order = await Order.findOne({ id: req.params.id, email: getCustomerEmail(req) }).lean();
+        const order = await Order.findOne({ id: req.params.id, email: getCustomerEmail(req) });
         if (!order) {
             return res.status(404).send('Order not found.');
         }
-        return res.render('customer/order-status', { order });
+        if (order.paymentStatus === 'Pending') {
+            await syncPhonePeOrderStatus(order, req);
+        }
+        return res.render('customer/order-status', { order: order.toObject() });
     } catch (error) {
         console.error('Failed to load customer order:', error.message);
         return res.status(503).send('Could not load your order. Please try again.');
@@ -574,7 +713,11 @@ app.get('/kitchen/:outletId', isAuthenticated, requireRole('kitchen'), async (re
         return res.status(403).send('<h1>403 Forbidden</h1><p>Access denied.</p>');
     }
     const outlet = getOutlet(req.params.outletId);
-    const outletActiveOrders = await Order.find({ outletId: outlet.id, status: { $ne: 'Rider Handoff' } }).sort({ createdAtMs: -1 }).lean();
+    const outletActiveOrders = await Order.find({
+        outletId: outlet.id,
+        status: { $ne: 'Rider Handoff' },
+        paymentStatus: { $in: ['Paid', 'Test payment approved'] }
+    }).sort({ createdAtMs: -1 }).lean();
     const outletHistoryOrders = await Order.find({ outletId: outlet.id, status: 'Rider Handoff' }).sort({ createdAtMs: -1 }).lean();
 
     res.render('kitchen/kds', { outlet, outletActiveOrders, outletHistoryOrders });
@@ -583,8 +726,9 @@ app.get('/kitchen/:outletId', isAuthenticated, requireRole('kitchen'), async (re
 app.get('/admin/dashboard', isAuthenticated, requireRole('admin'), async (req, res) => {
     const activeOrderDocuments = await fetchOrdersFromDb();
     const partyOrderDocuments = await fetchPartyOrdersFromDb();
-    const estimatedOrders = activeOrderDocuments.filter(order => order.status !== 'Rider Handoff');
-    res.render('admin/dashboard', { outlets, activeOrders: activeOrderDocuments, estimatedOrders, partyOrders: partyOrderDocuments });
+    const paidOrders = activeOrderDocuments.filter(isOrderPaid);
+    const estimatedOrders = paidOrders.filter(order => order.status !== 'Rider Handoff');
+    res.render('admin/dashboard', { outlets, activeOrders: paidOrders, estimatedOrders, partyOrders: partyOrderDocuments });
 });
 
 app.post('/admin/confirm-party-order', isAuthenticated, requireRole('admin'), async (req, res) => {
@@ -630,19 +774,46 @@ app.post('/admin/delete-party-order', isAuthenticated, requireRole('admin'), asy
 
 app.post('/admin/override-estimate', isAuthenticated, requireRole('admin'), async (req, res) => {
     const { orderId, minutes } = req.body;
-    const order = await Order.findOne({ id: orderId });
+    const parsedMinutes = Number.parseInt(minutes, 10);
+    if (!orderId || !Number.isInteger(parsedMinutes) || parsedMinutes < 10 || parsedMinutes > 240) {
+        return res.status(400).send('Choose a promise time between 10 and 240 minutes.');
+    }
 
-    if (order) {
-        const overrideMinutes = Math.max(parseInt(minutes) || order.promisedMinutes || order.aiPrepMinutes || 20, getOutlet(order.outletId).minPrepMinutes || 15);
+    try {
+        const order = await Order.findOne({ id: orderId });
+        if (!order || !isOrderPaid(order) || order.status === 'Rider Handoff') {
+            return res.status(404).send('Active paid order not found.');
+        }
+
+        const wasDelayed = order.status === 'Delayed / Manager Alert';
+        const overrideMinutes = Math.max(
+            parsedMinutes,
+            getOutlet(order.outletId).minPrepMinutes || 15
+        );
         order.promisedMinutes = overrideMinutes;
         order.promisedAt = new Date(Date.now() + overrideMinutes * 60000).toISOString();
         order.managerOverride = true;
-        await order.save();
-        io.emit('order-updated', order.toObject());
-        sendStatusNotification(order.toObject(), `The outlet manager has updated promise time for order ${order.id} to ${formatPromise(order.promisedAt)}.`);
-    }
 
-    res.redirect('/admin/dashboard');
+        if (wasDelayed) {
+            order.status = 'In Progress';
+            order.prepStartedAt = null;
+            order.alertSentAt = null;
+        }
+
+        await order.save();
+        const orderObject = order.toObject();
+        activeOrders = activeOrders.map(current =>
+            current.id === order.id ? orderObject : current
+        );
+        io.emit(wasDelayed ? 'new-order-received' : 'order-updated', orderObject);
+        await sendStatusNotification(orderObject, wasDelayed
+            ? `The outlet manager reset preparation. Your order is back in the kitchen queue with a new promise time of ${formatPromise(order.promisedAt)}.`
+            : `The outlet manager updated your promise time to ${formatPromise(order.promisedAt)}.`);
+        return res.redirect('/admin/dashboard');
+    } catch (error) {
+        console.error('Failed to override order promise:', error.message);
+        return res.status(503).send('Could not update the order promise. Please try again.');
+    }
 });
 
 app.get('/admin/cms', isAuthenticated, requireRole('admin'), async (req, res) => {
@@ -697,7 +868,7 @@ io.on('connection', (socket) => {
 
         try {
             const order = await Order.findOne({ id: orderId, outletId: user.outletId });
-            if (!order) return;
+            if (!order || !isOrderPaid(order)) return;
 
             const currentRank = stateRank[order.status] ?? 0;
             const newRank = stateRank[status];
@@ -708,7 +879,7 @@ io.on('connection', (socket) => {
             await order.save();
             const orderObject = order.toObject();
             activeOrders = activeOrders.map(current => current.id === order.id ? orderObject : current);
-            sendStatusNotification(orderObject, `Order ${order.id} status updated to ${status}.`);
+            await sendStatusNotification(orderObject, `Order status: ${status}.`);
             io.emit('order-updated', orderObject);
         } catch (error) {
             console.error('Failed to update order status in MongoDB:', error.message);
@@ -733,7 +904,11 @@ io.on('connection', (socket) => {
 
 setInterval(async () => {
     try {
-        const dueOrders = await Order.find({ status: { $ne: 'Rider Handoff' }, promisedAt: { $ne: null } }).lean();
+        const dueOrders = await Order.find({
+            status: { $ne: 'Rider Handoff' },
+            promisedAt: { $ne: null },
+            paymentStatus: { $in: ['Paid', 'Test payment approved'] }
+        }).lean();
         for (const order of dueOrders) {
             const promisedAt = new Date(order.promisedAt).getTime();
             if (!Number.isFinite(promisedAt)) continue;
@@ -747,7 +922,7 @@ setInterval(async () => {
 
                 if (updatedOrder) {
                     const payload = updatedOrder.toObject();
-                    sendStatusNotification(payload, `Order ${payload.id} is now 10 minutes past its promised time. The outlet manager has been alerted.`);
+                    await sendStatusNotification(payload, 'Your order is delayed. The outlet manager has been alerted.');
                     io.emit('manager-alert', payload);
                     io.emit('order-updated', payload);
                 }
