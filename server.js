@@ -257,16 +257,16 @@ async function fetchPartyOrdersFromDb() {
 }
 
 async function connectMongo() {
-    const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hydrabadi_kitchen';
-    try {
-        await mongoose.connect(mongoUri);
-        console.log(`MongoDB connected: ${mongoUri}`);
-        await fetchOrdersFromDb();
-        await fetchPartyOrdersFromDb();
-        await initializeMenuItems();
-    } catch (error) {
-        console.error('MongoDB connection failed:', error.message);
+    const mongoUri = process.env.MONGO_URI;
+    if (!mongoUri) {
+        throw new Error('MONGO_URI must be configured before starting the platform.');
     }
+
+    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
+    console.log('MongoDB connected.');
+    await fetchOrdersFromDb();
+    await fetchPartyOrdersFromDb();
+    await initializeMenuItems();
 }
 
 async function initializeMenuItems() {
@@ -902,40 +902,51 @@ io.on('connection', (socket) => {
     });
 });
 
-setInterval(async () => {
-    try {
-        const dueOrders = await Order.find({
-            status: { $ne: 'Rider Handoff' },
-            promisedAt: { $ne: null },
-            paymentStatus: { $in: ['Paid', 'Test payment approved'] }
-        }).lean();
-        for (const order of dueOrders) {
-            const promisedAt = new Date(order.promisedAt).getTime();
-            if (!Number.isFinite(promisedAt)) continue;
-            if (Date.now() > promisedAt + 10 * 60 * 1000 && order.status !== 'Delayed / Manager Alert') {
-                const updatedOrder = await Order.findOneAndUpdate({ id: order.id }, {
-                    $set: {
-                        status: 'Delayed / Manager Alert',
-                        alertSentAt: new Date().toISOString()
-                    }
-                }, { new: true });
+function startDelayedOrderMonitor() {
+    setInterval(async () => {
+        try {
+            const dueOrders = await Order.find({
+                status: { $ne: 'Rider Handoff' },
+                promisedAt: { $ne: null },
+                paymentStatus: { $in: ['Paid', 'Test payment approved'] }
+            }).lean();
+            for (const order of dueOrders) {
+                const promisedAt = new Date(order.promisedAt).getTime();
+                if (!Number.isFinite(promisedAt)) continue;
+                if (Date.now() > promisedAt + 10 * 60 * 1000 && order.status !== 'Delayed / Manager Alert') {
+                    const updatedOrder = await Order.findOneAndUpdate({ id: order.id }, {
+                        $set: {
+                            status: 'Delayed / Manager Alert',
+                            alertSentAt: new Date().toISOString()
+                        }
+                    }, { new: true });
 
-                if (updatedOrder) {
-                    const payload = updatedOrder.toObject();
-                    await sendStatusNotification(payload, 'Your order is delayed. The outlet manager has been alerted.');
-                    io.emit('manager-alert', payload);
-                    io.emit('order-updated', payload);
+                    if (updatedOrder) {
+                        const payload = updatedOrder.toObject();
+                        await sendStatusNotification(payload, 'Your order is delayed. The outlet manager has been alerted.');
+                        io.emit('manager-alert', payload);
+                        io.emit('order-updated', payload);
+                    }
                 }
             }
+        } catch (error) {
+            console.error('Delayed order check failed:', error.message);
         }
-    } catch (error) {
-        console.error('Delayed order check failed:', error.message);
-    }
-}, 60000);
-
-connectMongo();
+    }, 60000);
+}
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Platform running with RBAC & WebSockets at http://localhost:${PORT}`);
-});
+async function startPlatform() {
+    try {
+        await connectMongo();
+        startDelayedOrderMonitor();
+        server.listen(PORT, () => {
+            console.log(`Platform running with RBAC & WebSockets on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Platform startup failed:', error.message);
+        process.exitCode = 1;
+    }
+}
+
+startPlatform();
