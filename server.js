@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const { Order, PartyOrder, Customer, MenuItem } = require('./models');
@@ -25,6 +27,13 @@ const io = new Server(server);
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.get('/health', (req, res) => {
+    const databaseConnected = mongoose.connection.readyState === 1;
+    res.status(databaseConnected ? 200 : 503).json({
+        status: databaseConnected ? 'ok' : 'unavailable',
+        database: databaseConnected ? 'connected' : 'disconnected'
+    });
+});
 app.use(express.static('public'));
 
 outlets = [
@@ -33,10 +42,24 @@ outlets = [
     { id: 'kukatpally', name: 'Kukatpally Outlet', radius: 'Within 6 km', fssai: '10020047001894', minPrepMinutes: 22 }
 ];
 
+const sessionSecret = process.env.SESSION_SECRET || (
+    process.env.NODE_ENV === 'production' ? null : crypto.randomBytes(32).toString('hex')
+);
+if (!sessionSecret) {
+    throw new Error('SESSION_SECRET must be configured in production.');
+}
+
+const mongoClientPromise = mongoose.connection.asPromise().then(connection => connection.getClient());
 const sessionMiddleware = session({
-    secret: 'company-a-secret-key-2026',
+    secret: sessionSecret,
+    store: MongoStore.create({
+        clientPromise: mongoClientPromise,
+        collectionName: 'sessions',
+        ttl: 14 * 24 * 60 * 60
+    }),
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: { maxAge: 14 * 24 * 60 * 60 * 1000 }
 });
 app.use(sessionMiddleware);
 io.engine.use(sessionMiddleware);
