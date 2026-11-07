@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
+const mongoStoreModule = require('connect-mongo');
+const MongoStore = mongoStoreModule.MongoStore || mongoStoreModule.default || mongoStoreModule;
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
@@ -50,13 +51,17 @@ if (!sessionSecret) {
 }
 
 const mongoClientPromise = mongoose.connection.asPromise().then(connection => connection.getClient());
+const mongoStoreOptions = {
+    clientPromise: mongoClientPromise,
+    collectionName: 'sessions',
+    ttl: 14 * 24 * 60 * 60
+};
+const mongoSessionStore = typeof MongoStore.create === 'function'
+    ? MongoStore.create(mongoStoreOptions)
+    : new MongoStore(mongoStoreOptions);
 const sessionMiddleware = session({
     secret: sessionSecret,
-    store: MongoStore.create({
-        clientPromise: mongoClientPromise,
-        collectionName: 'sessions',
-        ttl: 14 * 24 * 60 * 60
-    }),
+    store: mongoSessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 14 * 24 * 60 * 60 * 1000 }
