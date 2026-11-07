@@ -914,7 +914,11 @@ function startDelayedOrderMonitor() {
                 const promisedAt = new Date(order.promisedAt).getTime();
                 if (!Number.isFinite(promisedAt)) continue;
                 if (Date.now() > promisedAt + 10 * 60 * 1000 && order.status !== 'Delayed / Manager Alert') {
-                    const updatedOrder = await Order.findOneAndUpdate({ id: order.id }, {
+                    const updatedOrder = await Order.findOneAndUpdate({
+                        id: order.id,
+                        status: { $ne: 'Delayed / Manager Alert' },
+                        paymentStatus: { $in: ['Paid', 'Test payment approved'] }
+                    }, {
                         $set: {
                             status: 'Delayed / Manager Alert',
                             alertSentAt: new Date().toISOString()

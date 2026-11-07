@@ -36,6 +36,18 @@
         </div>
     </header>
 
+    <% const delayedOrders = outletActiveOrders.filter(order => order.status === 'Delayed / Manager Alert'); %>
+    <% if (delayedOrders.length > 0) { %>
+        <section class="mb-8 rounded-2xl border border-rose-700 bg-rose-950/60 p-5 text-rose-100" role="alert">
+            <h2 class="font-extrabold">Manager alert: delayed orders (<%= delayedOrders.length %>)</h2>
+            <ul class="mt-2 space-y-1 text-sm">
+                <% delayedOrders.forEach(order => { %>
+                    <li><strong><%= order.id %></strong> is more than 10 minutes past its promised time. Please review and contact the customer.</li>
+                <% }) %>
+            </ul>
+        </section>
+    <% } %>
+
     <!-- Active Prep Queue -->
     <div class="space-y-6">
         <h2 class="text-lg font-extrabold uppercase tracking-wider text-stone-400 flex items-center gap-2">

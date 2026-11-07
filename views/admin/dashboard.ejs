@@ -10,6 +10,12 @@
     <%- include('../partials/nav') %>
 
     <main class="max-w-7xl mx-auto px-4 py-8">
+        <div id="manager-delay-alert" role="alert" class="hidden fixed top-4 right-4 z-50 max-w-md rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-900 shadow-xl">
+            <div class="font-extrabold">Order delay alert</div>
+            <div id="manager-delay-alert-message" class="mt-1"></div>
+            <button type="button" onclick="dismissManagerDelayAlert()" class="mt-2 text-xs font-bold underline">Dismiss</button>
+        </div>
+
         <!-- Header -->
         <div class="flex justify-between items-center mb-8">
             <div>
@@ -20,6 +26,18 @@
                 Manage Menu CMS
             </a>
         </div>
+
+        <% const delayedOrders = activeOrders.filter(order => order.status === 'Delayed / Manager Alert'); %>
+        <% if (delayedOrders.length > 0) { %>
+            <section class="mb-8 rounded-2xl border border-rose-300 bg-rose-50 p-5 text-rose-900" role="status">
+                <h2 class="font-extrabold">Delayed orders need attention (<%= delayedOrders.length %>)</h2>
+                <ul class="mt-2 space-y-1 text-sm">
+                    <% delayedOrders.forEach(order => { %>
+                        <li><strong><%= order.id %></strong> — <%= outlets.find(outlet => outlet.id === order.outletId)?.name || order.outletId %> is over 10 minutes past its promise.</li>
+                    <% }) %>
+                </ul>
+            </section>
+        <% } %>
 
         <!-- Outlet Overview Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -142,7 +160,7 @@
                                     </td>
                                     <td class="py-3 px-2 font-bold">₹<%= ord.total %></td>
                                     <td class="py-3 px-2">
-                                        <span class="text-xs font-bold px-2.5 py-1 rounded-full bg-stone-200 text-stone-800">
+                                        <span data-order-status="<%= ord.id %>" class="text-xs font-bold px-2.5 py-1 rounded-full <%= ord.status === 'Delayed / Manager Alert' ? 'bg-rose-100 text-rose-800' : 'bg-stone-200 text-stone-800' %>">
                                             <%= ord.status %>
                                         </span>
                                     </td>
@@ -158,6 +176,41 @@
     <!-- Real-time WebSockets Live Updates -->
     <script>
         const socket = io();
+        const delayAlert = document.getElementById('manager-delay-alert');
+        const delayAlertMessage = document.getElementById('manager-delay-alert-message');
+
+        function showManagerDelayAlert(order) {
+            const outletName = String(order.outletId || 'the outlet').replace(/-/g, ' ');
+            delayAlertMessage.textContent = `Order ${order.id} is more than 10 minutes past its promise at ${outletName}. Please review the kitchen queue and override the estimate if needed.`;
+            delayAlert.classList.remove('hidden');
+            const status = document.querySelector(`[data-order-status="${CSS.escape(order.id)}"]`);
+            if (status) {
+                status.textContent = 'Delayed / Manager Alert';
+                status.classList.remove('bg-stone-200', 'text-stone-800');
+                status.classList.add('bg-rose-100', 'text-rose-800');
+            }
+        }
+
+        function dismissManagerDelayAlert() {
+            delayAlert.classList.add('hidden');
+        }
+
+        const pendingDelayAlert = sessionStorage.getItem('hk-manager-delay-alert');
+        if (pendingDelayAlert) {
+            try {
+                showManagerDelayAlert(JSON.parse(pendingDelayAlert));
+            } catch (error) {
+                console.error('Could not restore manager delay alert:', error);
+            }
+            sessionStorage.removeItem('hk-manager-delay-alert');
+        }
+
+        socket.on('manager-alert', (order) => {
+            sessionStorage.setItem('hk-manager-delay-alert', JSON.stringify({
+                id: order.id,
+                outletId: order.outletId
+            }));
+        });
         socket.on('new-order-received', () => window.location.reload());
         socket.on('order-updated', () => window.location.reload());
         socket.on('party-order-submitted', () => window.location.reload());
